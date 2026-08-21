@@ -1,0 +1,72 @@
+{
+  "expo": {
+    "name": "TASKN",
+    "slug": "taskn-operations",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/images/icon.png",
+    "scheme": "taskn",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "ios": {
+      "icon": "./assets/expo.icon",
+      "bundleIdentifier": "com.taskn.operations",
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSCameraUsageDescription": "TASKN uses the camera to capture photo proof for completed tasks and to update your profile photo.",
+        "NSPhotoLibraryUsageDescription": "TASKN needs access to your photo library to attach photo proof and set your profile photo."
+      }
+    },
+    "android": {
+      "package": "com.taskn.operations",
+      "adaptiveIcon": {
+        "backgroundColor": "#E6F4FE",
+        "foregroundImage": "./assets/images/android-icon-foreground.png",
+        "backgroundImage": "./assets/images/android-icon-background.png",
+        "monochromeImage": "./assets/images/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false,
+      "permissions": [
+        "CAMERA",
+        "READ_MEDIA_IMAGES"
+      ]
+    },
+    "web": {
+      "output": "static",
+      "favicon": "./assets/images/favicon.png",
+      "bundler": "metro"
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#FF5500",
+          "image": "./assets/images/splash-icon.png",
+          "imageWidth": 76
+        }
+      ],
+      "expo-sharing",
+      "expo-audio",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "TASKN needs access to your photo library to attach photo proof and set your profile photo.",
+          "cameraPermission": "TASKN uses the camera to capture photo proof for completed tasks and to update your profile photo."
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/images/icon.png",
+          "color": "#FF5500"
+        }
+      ],
+      "@react-native-community/datetimepicker"
+    ],
+    "experiments": {
+      "typedRoutes": true,
+      "reactCompiler": true
+    }
+  }
+}
