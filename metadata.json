@@ -1,0 +1,6 @@
+{
+  "name": "TASKN Operations",
+  "description": "Retail store task management, calendar operations, media and visual proof gallery, and store communications dashboard.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

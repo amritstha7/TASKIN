@@ -1,0 +1,15 @@
+node_modules/
+build/
+dist/
+dev-dist/
+coverage/
+.DS_Store
+*.log
+.env*
+!.env.example
+
+# This repo is scoped to the web app only.
+# mobile/ is a separate Expo project with its own history/deployment.
+# realui/ is a scratch duplicate of src/ used for UI reference, not app code.
+mobile/
+realui/
