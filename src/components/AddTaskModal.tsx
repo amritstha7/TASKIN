@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { todayIso } from '../lib/format';
 import { motion } from 'motion/react';
 import { useApp } from '../context/AppContext';
 import { Priority, TaskCategory } from '../types';
@@ -20,7 +21,7 @@ export const AddTaskModal: React.FC<AddTaskModalProps> = ({ isPageMode = false }
   const [description, setDescription] = useState('');
   const [category, setCategory] = useState<string>('Protein Bar');
   const [customCategory, setCustomCategory] = useState('');
-  const [dueDate, setDueDate] = useState('2026-08-14');
+  const [dueDate, setDueDate] = useState(todayIso);
   const [priority, setPriority] = useState<Priority>('medium');
   const [repeat, setRepeat] = useState<'none' | 'daily' | 'weekly' | 'monthly'>('none');
   const [isUrgent, setIsUrgent] = useState(false);
@@ -55,7 +56,7 @@ export const AddTaskModal: React.FC<AddTaskModalProps> = ({ isPageMode = false }
       title: title.trim(),
       description: description.trim(),
       category: finalCategory,
-      dueDate: dueDate || '2026-08-14',
+      dueDate: dueDate || todayIso(),
       priority: isUrgent ? 'urgent' : priority,
       repeat,
       isUrgent,

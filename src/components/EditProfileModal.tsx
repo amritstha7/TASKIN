@@ -1,6 +1,9 @@
 import React, { useState, useRef } from 'react';
 import { motion } from 'motion/react';
 import { useApp } from '../context/AppContext';
+import { useAuth } from '../providers/AuthProvider';
+import { resizeImageToBlob } from '../lib/canvasResize';
+import { BUCKETS, getPublicUrl, uploadImage } from '../lib/storage';
 
 const PRESET_AVATARS = [
   {
@@ -23,11 +26,10 @@ const PRESET_AVATARS = [
 
 export const EditProfileModal: React.FC = () => {
   const { isEditProfileModalOpen, setIsEditProfileModalOpen, userProfile, updateUserProfile, showToast, t } = useApp();
+  const { user } = useAuth();
 
   const [name, setName] = useState(userProfile.name);
-  const [email, setEmail] = useState(userProfile.email);
   const [role, setRole] = useState(userProfile.role);
-  const [branch, setBranch] = useState(userProfile.branch);
   const [avatarUrl, setAvatarUrl] = useState(userProfile.avatarUrl);
   const [isProcessingImage, setIsProcessingImage] = useState(false);
   const [dragActive, setDragActive] = useState(false);
@@ -37,70 +39,33 @@ export const EditProfileModal: React.FC = () => {
 
   if (!isEditProfileModalOpen) return null;
 
-  // Process file to compressed Base64 Data URL
-  const processImageFile = (file: File) => {
+  // Resize, upload to the avatars storage bucket, and use the resulting public URL
+  const processImageFile = async (file: File) => {
     if (!file.type.startsWith('image/')) {
       showToast('Please select a valid image file (JPG, PNG, WebP)', 'error');
       return;
     }
+    if (!user) return;
 
     setIsProcessingImage(true);
-    const reader = new FileReader();
-
-    reader.onload = (event) => {
-      const img = new Image();
-      img.onload = () => {
-        // Compress to maximum 400x400 for crisp avatar rendering & efficient storage
-        const canvas = document.createElement('canvas');
-        const MAX_SIZE = 400;
-        let width = img.width;
-        let height = img.height;
-
-        if (width > height) {
-          if (width > MAX_SIZE) {
-            height = Math.round((height * MAX_SIZE) / width);
-            width = MAX_SIZE;
-          }
-        } else {
-          if (height > MAX_SIZE) {
-            width = Math.round((width * MAX_SIZE) / height);
-            height = MAX_SIZE;
-          }
-        }
-
-        canvas.width = width;
-        canvas.height = height;
-        const ctx = canvas.getContext('2d');
-        if (ctx) {
-          ctx.drawImage(img, 0, 0, width, height);
-          const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.85);
-          setAvatarUrl(compressedDataUrl);
-          showToast('Profile photo loaded from device!', 'success');
-        }
-        setIsProcessingImage(false);
-      };
-
-      img.onerror = () => {
-        setIsProcessingImage(false);
-        showToast('Failed to parse selected image', 'error');
-      };
-
-      if (event.target?.result) {
-        img.src = event.target.result as string;
-      }
-    };
-
-    reader.onerror = () => {
+    try {
+      const blob = await resizeImageToBlob(file, 400, 0.85);
+      const path = `${user.id}/avatar.jpg`;
+      await uploadImage(BUCKETS.avatars, path, blob);
+      // Cache-bust: the storage path is stable, so the public URL alone won't
+      // change after replacing the file — force reload with a version param.
+      setAvatarUrl(`${getPublicUrl(BUCKETS.avatars, path)}?v=${Date.now()}`);
+      showToast('Profile photo uploaded!', 'success');
+    } catch {
+      showToast('Failed to upload image', 'error');
+    } finally {
       setIsProcessingImage(false);
-      showToast('Error reading file from device', 'error');
-    };
-
-    reader.readAsDataURL(file);
+    }
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
-      processImageFile(e.target.files[0]);
+      void processImageFile(e.target.files[0]);
     }
   };
 
@@ -119,20 +84,19 @@ export const EditProfileModal: React.FC = () => {
     e.stopPropagation();
     setDragActive(false);
     if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-      processImageFile(e.dataTransfer.files[0]);
+      void processImageFile(e.dataTransfer.files[0]);
     }
   };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    // `email` and `branch` are display-only here: the login email is a
+    // separate auth flow, and branch reassignment is blocked server-side.
     updateUserProfile({
       name: name.trim(),
-      email: email.trim(),
       role: role.trim(),
-      branch: branch.trim(),
       avatarUrl: avatarUrl.trim(),
     });
-    showToast(t.toastProfileUpdated || 'Profile updated successfully!');
     setIsEditProfileModalOpen(false);
   };
 
@@ -353,14 +317,14 @@ export const EditProfileModal: React.FC = () => {
 
             <div className="flex flex-col gap-1">
               <label className="font-bold text-[#2C2C2E] dark:text-[#eff1f5]">
-                Email Address <span className="text-[#FF5500]">*</span>
+                Email Address
               </label>
               <input
                 type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="border border-[#e5e5ea] dark:border-[#35383c] rounded-xl px-3.5 py-2.5 bg-white dark:bg-[#25282c] text-[#2C2C2E] dark:text-[#eff1f5] focus:outline-none focus:border-[#FF5500]"
-                required
+                value={userProfile.email}
+                readOnly
+                disabled
+                className="border border-[#e5e5ea] dark:border-[#35383c] rounded-xl px-3.5 py-2.5 bg-[#F7F7F8] dark:bg-[#191c1f] text-[#8E8E93] dark:text-[#8e9095] cursor-not-allowed"
               />
             </div>
           </div>
@@ -385,9 +349,11 @@ export const EditProfileModal: React.FC = () => {
               </label>
               <input
                 type="text"
-                value={branch}
-                onChange={(e) => setBranch(e.target.value)}
-                className="border border-[#e5e5ea] dark:border-[#35383c] rounded-xl px-3.5 py-2.5 bg-white dark:bg-[#25282c] text-[#2C2C2E] dark:text-[#eff1f5] focus:outline-none focus:border-[#FF5500]"
+                value={userProfile.branch}
+                readOnly
+                disabled
+                title="Contact an admin to move branches"
+                className="border border-[#e5e5ea] dark:border-[#35383c] rounded-xl px-3.5 py-2.5 bg-[#F7F7F8] dark:bg-[#191c1f] text-[#8E8E93] dark:text-[#8e9095] cursor-not-allowed"
               />
             </div>
           </div>

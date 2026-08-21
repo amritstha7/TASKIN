@@ -12,6 +12,7 @@ export const TaskAccordions: React.FC = () => {
     addNoteToTask,
     communications,
     toggleCommunicationComplete,
+    deleteCommunication,
     addNoteToComm,
     notes,
     addPersonalNote,
@@ -298,7 +299,7 @@ export const TaskAccordions: React.FC = () => {
                             {task.completed && task.completedBy && (
                               <div className="text-[11px] text-[#008259] font-bold mt-1.5 flex items-center gap-1.5 bg-[#e1ffec]/60 dark:bg-[#008259]/20 px-2 py-1 rounded-lg w-fit">
                                 <span className="material-symbols-outlined text-[15px]">verified</span>
-                                Completed by {task.completedBy} at {task.completedAt || '14:30'}
+                                Completed by {task.completedBy}{task.completedAt ? ` at ${task.completedAt}` : ''}
                               </div>
                             )}
 
@@ -410,6 +411,15 @@ export const TaskAccordions: React.FC = () => {
                           >
                             <span className="material-symbols-outlined text-[20px]">note_add</span>
                           </motion.button>
+                          <motion.button
+                            whileHover={{ scale: 1.1 }}
+                            whileTap={{ scale: 0.9 }}
+                            onClick={() => deleteTask(task.id)}
+                            className="p-2 text-[#FF3300] hover:bg-[#FFF0EB] rounded-xl transition-colors min-h-[36px] min-w-[36px] flex items-center justify-center cursor-pointer"
+                            title={t.delete}
+                          >
+                            <span className="material-symbols-outlined text-[20px]">delete</span>
+                          </motion.button>
                         </div>
                       </div>
 
@@ -420,19 +430,16 @@ export const TaskAccordions: React.FC = () => {
                           animate={{ opacity: 1, y: 0 }}
                           className="mt-3 pt-3 border-t border-[#e5e5ea] dark:border-[#35383c] flex gap-2"
                         >
-                          <input
-                            type="text"
+                          <textarea
+                            rows={2}
                             value={taskNoteInput}
                             onChange={(e) => setTaskNoteInput(e.target.value)}
                             placeholder="Type operational update..."
-                            className="flex-1 text-xs border border-[#e5e5ea] dark:border-[#5d3f3c] rounded-xl px-3 py-2 bg-white dark:bg-[#191c1f] text-[#2C2C2E] dark:text-[#eff1f5] focus:outline-none focus:border-[#FF5500]"
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter') handleSaveTaskNote(task.id);
-                            }}
+                            className="flex-1 text-xs border border-[#e5e5ea] dark:border-[#5d3f3c] rounded-xl px-3 py-2 bg-white dark:bg-[#191c1f] text-[#2C2C2E] dark:text-[#eff1f5] focus:outline-none focus:border-[#FF5500] resize-none"
                           />
                           <button
                             onClick={() => handleSaveTaskNote(task.id)}
-                            className="bg-[#FF5500] text-white px-4 py-2 rounded-xl text-xs font-bold hover:bg-[#E04800] transition-colors cursor-pointer"
+                            className="bg-[#FF5500] text-white px-4 py-2 rounded-xl text-xs font-bold hover:bg-[#E04800] transition-colors cursor-pointer self-start"
                           >
                             {t.save}
                           </button>
@@ -546,7 +553,7 @@ export const TaskAccordions: React.FC = () => {
                             {task.completed && task.completedBy && (
                               <div className="text-[11px] text-[#008259] font-bold mt-1.5 flex items-center gap-1.5 bg-[#e1ffec]/60 dark:bg-[#008259]/20 px-2 py-1 rounded-lg w-fit">
                                 <span className="material-symbols-outlined text-[15px]">verified</span>
-                                Completed by {task.completedBy} ({task.completedAt || '13:15'})
+                                Completed by {task.completedBy}{task.completedAt ? ` (${task.completedAt})` : ''}
                               </div>
                             )}
 
@@ -664,19 +671,16 @@ export const TaskAccordions: React.FC = () => {
                           animate={{ opacity: 1, y: 0 }}
                           className="mt-3 pt-3 border-t border-[#e5e5ea] dark:border-[#35383c] flex gap-2"
                         >
-                          <input
-                            type="text"
+                          <textarea
+                            rows={2}
                             value={taskNoteInput}
                             onChange={(e) => setTaskNoteInput(e.target.value)}
                             placeholder="Add shift update note..."
-                            className="flex-1 text-xs border border-[#e5e5ea] dark:border-[#5d3f3c] rounded-xl px-3 py-2 bg-white dark:bg-[#191c1f] text-[#2C2C2E] dark:text-[#eff1f5] focus:outline-none focus:border-[#FF5500]"
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter') handleSaveTaskNote(task.id);
-                            }}
+                            className="flex-1 text-xs border border-[#e5e5ea] dark:border-[#5d3f3c] rounded-xl px-3 py-2 bg-white dark:bg-[#191c1f] text-[#2C2C2E] dark:text-[#eff1f5] focus:outline-none focus:border-[#FF5500] resize-none"
                           />
                           <button
                             onClick={() => handleSaveTaskNote(task.id)}
-                            className="bg-[#FF5500] text-white px-4 py-2 rounded-xl text-xs font-bold hover:bg-[#E04800] transition-colors cursor-pointer"
+                            className="bg-[#FF5500] text-white px-4 py-2 rounded-xl text-xs font-bold hover:bg-[#E04800] transition-colors cursor-pointer self-start"
                           >
                             {t.save}
                           </button>
@@ -781,16 +785,16 @@ export const TaskAccordions: React.FC = () => {
                           )}
                           {activeNoteCommId === comm.id && (
                             <div className="mt-2 flex gap-1.5">
-                              <input
-                                type="text"
+                              <textarea
+                                rows={2}
                                 value={commNoteInput}
                                 onChange={(e) => setCommNoteInput(e.target.value)}
                                 placeholder="Add comm note..."
-                                className="text-xs border rounded-lg px-2 py-1 w-full bg-white dark:bg-[#191c1f] text-[#2C2C2E] dark:text-[#eff1f5] focus:outline-none"
+                                className="text-xs border rounded-lg px-2 py-1 w-full bg-white dark:bg-[#191c1f] text-[#2C2C2E] dark:text-[#eff1f5] focus:outline-none resize-none"
                               />
                               <button
                                 onClick={() => handleSaveCommNote(comm.id)}
-                                className="bg-[#FF5500] text-white px-2 py-1 rounded-lg text-xs font-bold"
+                                className="bg-[#FF5500] text-white px-2 py-1 rounded-lg text-xs font-bold self-start"
                               >
                                 Add
                               </button>
@@ -868,6 +872,15 @@ export const TaskAccordions: React.FC = () => {
                                 note_add
                               </span>
                             </motion.button>
+                            <motion.button
+                              whileHover={{ scale: 1.1 }}
+                              whileTap={{ scale: 0.9 }}
+                              onClick={() => deleteCommunication(comm.id)}
+                              className="text-[#FF3300] hover:bg-[#FFF0EB] p-1.5 rounded-xl transition-colors cursor-pointer"
+                              title={t.delete}
+                            >
+                              <span className="material-symbols-outlined text-[20px]">delete</span>
+                            </motion.button>
                           </div>
                         </td>
                       </tr>
@@ -936,24 +949,24 @@ export const TaskAccordions: React.FC = () => {
                   onSubmit={handleAddPersonalNoteSubmit}
                   className="mb-3.5 flex gap-2"
                 >
-                  <input
-                    type="text"
+                  <textarea
+                    rows={2}
                     value={newPersonalNote}
                     onChange={(e) => setNewPersonalNote(e.target.value)}
                     placeholder="Write a scratchpad note or reminder..."
                     autoFocus
-                    className="flex-1 text-xs border border-[#FFD8CC] dark:border-[#5d3f3c] rounded-xl px-3.5 py-2.5 bg-[#FFF9F6] dark:bg-[#25282c] text-[#2C2C2E] dark:text-[#eff1f5] focus:outline-none focus:border-[#FF5500]"
+                    className="flex-1 text-xs border border-[#FFD8CC] dark:border-[#5d3f3c] rounded-xl px-3.5 py-2.5 bg-[#FFF9F6] dark:bg-[#25282c] text-[#2C2C2E] dark:text-[#eff1f5] focus:outline-none focus:border-[#FF5500] resize-none"
                   />
                   <button
                     type="submit"
-                    className="bg-[#FF5500] text-white px-4 py-2.5 rounded-xl text-xs font-bold hover:bg-[#E04800] transition-colors cursor-pointer"
+                    className="bg-[#FF5500] text-white px-4 py-2.5 rounded-xl text-xs font-bold hover:bg-[#E04800] transition-colors cursor-pointer self-start"
                   >
                     {t.addNote}
                   </button>
                   <button
                     type="button"
                     onClick={() => setShowAddNoteInput(false)}
-                    className="border border-[#e5e5ea] dark:border-[#5d3f3c] text-[#8E8E93] px-3 py-2.5 rounded-xl text-xs hover:bg-[#F7F7F8] cursor-pointer"
+                    className="border border-[#e5e5ea] dark:border-[#5d3f3c] text-[#8E8E93] px-3 py-2.5 rounded-xl text-xs hover:bg-[#F7F7F8] cursor-pointer self-start"
                   >
                     {t.cancel}
                   </button>

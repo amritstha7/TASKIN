@@ -6,6 +6,7 @@ export const CommunicationsScreen: React.FC = () => {
   const {
     communications,
     toggleCommunicationComplete,
+    deleteCommunication,
     addNoteToComm,
     setSelectedAttachment,
     setCurrentScreen,
@@ -232,6 +233,16 @@ export const CommunicationsScreen: React.FC = () => {
                   >
                     <span className="material-symbols-outlined text-[20px]">note_add</span>
                   </motion.button>
+
+                  <motion.button
+                    whileHover={{ scale: 1.1 }}
+                    whileTap={{ scale: 0.9 }}
+                    onClick={() => deleteCommunication(comm.id)}
+                    className="p-2 text-[#FF3300] hover:bg-[#FFF0EB] rounded-xl transition-colors cursor-pointer"
+                    title={t.delete}
+                  >
+                    <span className="material-symbols-outlined text-[20px]">delete</span>
+                  </motion.button>
                 </div>
               </div>
 
@@ -242,19 +253,16 @@ export const CommunicationsScreen: React.FC = () => {
                   animate={{ opacity: 1, y: 0 }}
                   className="mt-3 pt-3 border-t border-[#e5e5ea] dark:border-[#35383c] flex gap-2"
                 >
-                  <input
-                    type="text"
+                  <textarea
+                    rows={2}
                     value={commNoteInput}
                     onChange={(e) => setCommNoteInput(e.target.value)}
                     placeholder="Add communication note..."
-                    className="flex-1 text-xs border border-[#e5e5ea] dark:border-[#5d3f3c] rounded-xl px-3 py-2 bg-white dark:bg-[#191c1f] text-[#2C2C2E] dark:text-[#eff1f5] focus:outline-none focus:border-[#FF5500]"
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') handleSaveCommNote(comm.id);
-                    }}
+                    className="flex-1 text-xs border border-[#e5e5ea] dark:border-[#5d3f3c] rounded-xl px-3 py-2 bg-white dark:bg-[#191c1f] text-[#2C2C2E] dark:text-[#eff1f5] focus:outline-none focus:border-[#FF5500] resize-none"
                   />
                   <button
                     onClick={() => handleSaveCommNote(comm.id)}
-                    className="bg-[#FF5500] text-white px-4 py-2 rounded-xl text-xs font-bold hover:bg-[#E04800] transition-colors cursor-pointer"
+                    className="bg-[#FF5500] text-white px-4 py-2 rounded-xl text-xs font-bold hover:bg-[#E04800] transition-colors cursor-pointer self-start"
                   >
                     {t.save}
                   </button>

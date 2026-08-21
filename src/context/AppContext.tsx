@@ -1,23 +1,19 @@
-import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
+import React, { createContext, useContext, useState, useMemo } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import {
   Task,
-  TaskPhotoProof,
   Communication,
-  MyNote,
-  ActivityItem,
   UserProfile,
-  TopPerformer,
   ScreenType,
 } from '../types';
-import {
-  INITIAL_USER,
-  INITIAL_TASKS,
-  INITIAL_COMMUNICATIONS,
-  INITIAL_NOTES,
-  INITIAL_ACTIVITIES,
-  INITIAL_TOP_PERFORMERS,
-} from '../data/initialData';
 import { translations, Translations, LanguageKey } from '../i18n/translations';
+import { useAuth } from '../providers/AuthProvider';
+import { useProfile } from '../hooks/useProfile';
+import { useTasks } from '../hooks/useTasks';
+import { useCommunications } from '../hooks/useCommunications';
+import { usePersonalNotes } from '../hooks/usePersonalNotes';
+import { useActivities } from '../hooks/useActivities';
+import { useTopPerformers } from '../hooks/useTopPerformers';
 
 interface AppContextType {
   currentScreen: ScreenType;
@@ -31,37 +27,39 @@ interface AppContextType {
   goToNextMonth: () => void;
   goToPrevMonth: () => void;
   goToToday: () => void;
-  
+
   // Data
+  isLoading: boolean;
   tasks: Task[];
   communications: Communication[];
-  notes: MyNote[];
-  activities: ActivityItem[];
+  notes: import('../types').MyNote[];
+  activities: import('../types').ActivityItem[];
   userProfile: UserProfile;
-  topPerformers: TopPerformer[];
-  
+  topPerformers: import('../types').TopPerformer[];
+
   // i18n
   t: Translations;
   language: LanguageKey;
   setLanguage: (lang: LanguageKey) => void;
-  
+
   // Theme
   isDarkMode: boolean;
   setTheme: (theme: 'light' | 'dark' | 'auto') => void;
   toggleTheme: () => void;
-  
+
   // Calendar View Mode (AD, BS, Dual)
   calendarMode: 'ad' | 'bs' | 'dual';
   setCalendarMode: (mode: 'ad' | 'bs' | 'dual') => void;
-  
+
   // Actions
   addTask: (task: Omit<Task, 'id' | 'createdAt' | 'completed'>) => void;
   toggleTaskComplete: (taskId: string) => void;
-  completeTaskWithPhoto: (taskId: string, photo: TaskPhotoProof, note?: string) => void;
-  attachPhotoToTask: (taskId: string, photo: TaskPhotoProof) => void;
+  completeTaskWithPhoto: (taskId: string, blob: Blob, caption?: string) => void;
+  attachPhotoToTask: (taskId: string, blob: Blob, caption?: string) => void;
   removePhotoFromTask: (taskId: string, photoId: string) => void;
   deleteTask: (taskId: string) => void;
   toggleCommunicationComplete: (commId: string) => void;
+  deleteCommunication: (commId: string) => void;
   addNoteToTask: (taskId: string, noteText: string) => void;
   addNoteToComm: (commId: string, noteText: string) => void;
   addPersonalNote: (text: string) => void;
@@ -72,7 +70,8 @@ interface AppContextType {
   clearCache: () => void;
   syncData: () => void;
   playChime: () => void;
-  
+  signOut: () => void;
+
   // Modals & UI States
   isAddTaskModalOpen: boolean;
   setIsAddTaskModalOpen: (open: boolean) => void;
@@ -92,7 +91,7 @@ interface AppContextType {
   setIsExportReportModalOpen: (open: boolean) => void;
   toast: { message: string; type: 'success' | 'info' | 'error' } | null;
   showToast: (message: string, type?: 'success' | 'info' | 'error') => void;
-  
+
   // Filtered metrics
   urgentTasksCount: number;
   generalTasksCount: number;
@@ -102,67 +101,48 @@ interface AppContextType {
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
-const STORAGE_KEYS = {
-  TASKS: 'taskn_tasks_v2',
-  COMMUNICATIONS: 'taskn_comms_v2',
-  NOTES: 'taskn_notes_v2',
-  ACTIVITIES: 'taskn_activities_v2',
-  USER: 'taskn_user_v2',
+const DEFAULT_PROFILE: UserProfile = {
+  id: '',
+  name: '',
+  email: '',
+  role: '',
+  branch: '',
+  joinedDate: '',
+  avatarUrl: '',
+  theme: 'auto',
+  language: 'English',
+  calendarMode: 'dual',
+  pushNotifications: true,
+  dailySummary: true,
+  soundVibration: true,
 };
 
+const NOTIFICATION_READ_STORAGE_KEY = 'taskn:read-notification-ids';
+
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const queryClient = useQueryClient();
+  const { signOut: authSignOut } = useAuth();
+
+  const { profile, isLoading: profileLoading, updateProfile } = useProfile();
+  const userProfile = profile ?? DEFAULT_PROFILE;
+
+  const tasksHook = useTasks();
+  const commsHook = useCommunications();
+  const personalNotesHook = usePersonalNotes();
+  const activitiesHook = useActivities();
+  const { topPerformers } = useTopPerformers();
+
+  const tasks = tasksHook.tasks;
+  const communications = commsHook.communications;
+  const notes = personalNotesHook.notes;
+  const activities = activitiesHook.activities;
+
+  const isLoading = profileLoading || tasksHook.isLoading;
+
   const [currentScreen, setCurrentScreen] = useState<ScreenType>('dashboard');
-  const [selectedDate, setSelectedDate] = useState<string>('2026-08-14');
-  const [calendarMonth, setCalendarMonth] = useState<number>(7); // August = 7 (0-indexed)
-  const [calendarYear, setCalendarYear] = useState<number>(2026);
-
-  // Load persisted state or fallback to authentic defaults
-  const [tasks, setTasks] = useState<Task[]>(() => {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEYS.TASKS);
-      return saved ? JSON.parse(saved) : INITIAL_TASKS;
-    } catch {
-      return INITIAL_TASKS;
-    }
-  });
-
-  const [communications, setCommunications] = useState<Communication[]>(() => {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEYS.COMMUNICATIONS);
-      return saved ? JSON.parse(saved) : INITIAL_COMMUNICATIONS;
-    } catch {
-      return INITIAL_COMMUNICATIONS;
-    }
-  });
-
-  const [notes, setNotes] = useState<MyNote[]>(() => {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEYS.NOTES);
-      return saved ? JSON.parse(saved) : INITIAL_NOTES;
-    } catch {
-      return INITIAL_NOTES;
-    }
-  });
-
-  const [activities, setActivities] = useState<ActivityItem[]>(() => {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEYS.ACTIVITIES);
-      return saved ? JSON.parse(saved) : INITIAL_ACTIVITIES;
-    } catch {
-      return INITIAL_ACTIVITIES;
-    }
-  });
-
-  const [userProfile, setUserProfile] = useState<UserProfile>(() => {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEYS.USER);
-      return saved ? JSON.parse(saved) : INITIAL_USER;
-    } catch {
-      return INITIAL_USER;
-    }
-  });
-
-  const [topPerformers] = useState<TopPerformer[]>(INITIAL_TOP_PERFORMERS);
+  const [selectedDate, setSelectedDate] = useState<string>(() => toIsoDate(new Date()));
+  const [calendarMonth, setCalendarMonth] = useState<number>(() => new Date().getMonth());
+  const [calendarYear, setCalendarYear] = useState<number>(() => new Date().getFullYear());
 
   // Modals state
   const [isAddTaskModalOpen, setIsAddTaskModalOpen] = useState(false);
@@ -181,19 +161,28 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [isExportReportModalOpen, setIsExportReportModalOpen] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'info' | 'error' } | null>(null);
 
+  const showToast = (message: string, type: 'success' | 'info' | 'error' = 'success') => {
+    setToast({ message, type });
+    setTimeout(() => {
+      setToast((prev) => (prev?.message === message ? null : prev));
+    }, 2800);
+  };
+
+  const onError = (err: unknown) => {
+    showToast(err instanceof Error ? err.message : 'Something went wrong', 'error');
+  };
+
   // Internationalization
   const language = userProfile.language || 'English';
-  const t = useMemo(() => {
-    return translations[language] || translations.English;
-  }, [language]);
+  const t = useMemo(() => translations[language] || translations.English, [language]);
 
   const setLanguage = (newLang: LanguageKey) => {
-    updateUserProfile({ language: newLang });
+    void updateProfile({ language: newLang }).catch(onError);
     const dict = translations[newLang] || translations.English;
     showToast(dict.toastSettingsSaved || 'Language updated!');
   };
 
-  // Theme Handling (Clean & Robust)
+  // Theme Handling
   const [systemIsDark, setSystemIsDark] = useState<boolean>(() => {
     if (typeof window !== 'undefined' && window.matchMedia) {
       return window.matchMedia('(prefers-color-scheme: dark)').matches;
@@ -201,7 +190,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return false;
   });
 
-  useEffect(() => {
+  React.useEffect(() => {
     if (typeof window === 'undefined' || !window.matchMedia) return;
     const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
     const handler = (e: MediaQueryListEvent) => setSystemIsDark(e.matches);
@@ -215,7 +204,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return systemIsDark;
   }, [userProfile.theme, systemIsDark]);
 
-  useEffect(() => {
+  React.useEffect(() => {
     const root = document.documentElement;
     if (isDarkMode) {
       root.classList.add('dark');
@@ -227,7 +216,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }, [isDarkMode]);
 
   const setTheme = (newTheme: 'light' | 'dark' | 'auto') => {
-    updateUserProfile({ theme: newTheme });
+    void updateProfile({ theme: newTheme }).catch(onError);
   };
 
   const toggleTheme = () => {
@@ -236,61 +225,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     showToast(`${nextTheme === 'dark' ? t.themeDark : t.themeLight}`, 'info');
   };
 
-  // Calendar View Mode: 'ad' | 'bs' | 'dual'
   const calendarMode = userProfile.calendarMode || 'dual';
   const setCalendarMode = (mode: 'ad' | 'bs' | 'dual') => {
-    updateUserProfile({ calendarMode: mode });
-    const modeLabel =
-      mode === 'ad' ? t.calendarModeAD : mode === 'bs' ? t.calendarModeBS : t.calendarModeDual;
+    void updateProfile({ calendarMode: mode }).catch(onError);
+    const modeLabel = mode === 'ad' ? t.calendarModeAD : mode === 'bs' ? t.calendarModeBS : t.calendarModeDual;
     showToast(`${t.calendarViewPreference}: ${modeLabel}`, 'info');
-  };
-
-  // Save to storage
-  useEffect(() => {
-    try {
-      localStorage.setItem(STORAGE_KEYS.TASKS, JSON.stringify(tasks));
-    } catch (e) {
-      console.error(e);
-    }
-  }, [tasks]);
-
-  useEffect(() => {
-    try {
-      localStorage.setItem(STORAGE_KEYS.COMMUNICATIONS, JSON.stringify(communications));
-    } catch (e) {
-      console.error(e);
-    }
-  }, [communications]);
-
-  useEffect(() => {
-    try {
-      localStorage.setItem(STORAGE_KEYS.NOTES, JSON.stringify(notes));
-    } catch (e) {
-      console.error(e);
-    }
-  }, [notes]);
-
-  useEffect(() => {
-    try {
-      localStorage.setItem(STORAGE_KEYS.ACTIVITIES, JSON.stringify(activities));
-    } catch (e) {
-      console.error(e);
-    }
-  }, [activities]);
-
-  useEffect(() => {
-    try {
-      localStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(userProfile));
-    } catch (e) {
-      console.error(e);
-    }
-  }, [userProfile]);
-
-  const showToast = (message: string, type: 'success' | 'info' | 'error' = 'success') => {
-    setToast({ message, type });
-    setTimeout(() => {
-      setToast((prev) => (prev?.message === message ? null : prev));
-    }, 2800);
   };
 
   const playChime = () => {
@@ -334,301 +273,173 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const goToToday = () => {
-    setCalendarMonth(7); // Aug 2026
-    setCalendarYear(2026);
-    setSelectedDate('2026-08-14');
-    showToast(`${t.monthAugust} 14, 2026`, 'info');
+    const now = new Date();
+    setCalendarMonth(now.getMonth());
+    setCalendarYear(now.getFullYear());
+    setSelectedDate(toIsoDate(now));
+    showToast(now.toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' }), 'info');
   };
 
   const addTask = (taskData: Omit<Task, 'id' | 'createdAt' | 'completed'>) => {
-    const newTask: Task = {
-      ...taskData,
-      id: `task-${Date.now()}`,
-      completed: false,
-      createdAt: new Date().toISOString(),
-    };
-
-    setTasks((prev) => [newTask, ...prev]);
-
-    // Add activity log
-    const nowTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
-    const newActivity: ActivityItem = {
-      id: `act-${Date.now()}`,
-      title: newTask.title,
-      description: `Task created in category "${newTask.category}".`,
-      type: 'created',
-      user: userProfile.name,
-      time: nowTime,
-      date: '14/08/2026',
-      statusBadge: 'Created',
-    };
-    setActivities((prev) => [newActivity, ...prev]);
-
-    showToast(t.toastTaskAdded || `Task "${newTask.title}" added successfully!`);
-    playChime();
+    tasksHook
+      .createTask({
+        title: taskData.title,
+        description: taskData.description,
+        category: taskData.category,
+        dueDate: taskData.dueDate,
+        priority: taskData.priority,
+        repeat: taskData.repeat,
+        isUrgent: taskData.isUrgent,
+        notifications: taskData.notifications,
+        attachmentName: taskData.attachmentName,
+        attachmentUrl: taskData.attachmentUrl,
+      })
+      .then(() => {
+        showToast(t.toastTaskAdded || `Task "${taskData.title}" added successfully!`);
+        playChime();
+      })
+      .catch(onError);
   };
 
   const toggleTaskComplete = (taskId: string) => {
-    setTasks((prev) =>
-      prev.map((tItem) => {
-        if (tItem.id === taskId) {
-          const willBeCompleted = !tItem.completed;
-          const nowTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
-
-          // Record activity log
-          const newActivity: ActivityItem = {
-            id: `act-${Date.now()}`,
-            title: tItem.title,
-            description: willBeCompleted ? 'Task marked as completed.' : 'Task reopened for further action.',
-            type: willBeCompleted ? 'completed' : 'updated',
-            user: userProfile.name,
-            time: nowTime,
-            date: '14/08/2026',
-            statusBadge: willBeCompleted ? 'Completed' : 'Updated',
-          };
-          setActivities((a) => [newActivity, ...a]);
-
-          if (willBeCompleted) {
-            playChime();
-            showToast(t.toastTaskCompleted);
-          } else {
-            showToast(t.toastTaskReopened, 'info');
-          }
-
-          return {
-            ...tItem,
-            completed: willBeCompleted,
-            completedBy: willBeCompleted ? userProfile.name : undefined,
-            completedAt: willBeCompleted ? nowTime : undefined,
-          };
-        }
-        return tItem;
-      })
-    );
-  };
-
-  const completeTaskWithPhoto = (taskId: string, photo: TaskPhotoProof, note?: string) => {
-    const nowTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
-    setTasks((prev) =>
-      prev.map((tItem) => {
-        if (tItem.id === taskId) {
-          const updatedPhotos = [...(tItem.photos || []), photo];
-          const updatedNotes = note && note.trim() ? [...(tItem.notes || []), note.trim()] : (tItem.notes || []);
-          return {
-            ...tItem,
-            completed: true,
-            completedBy: userProfile.name,
-            completedAt: nowTime,
-            photos: updatedPhotos,
-            notes: updatedNotes,
-          };
-        }
-        return tItem;
-      })
-    );
-
     const task = tasks.find((tItem) => tItem.id === taskId);
-    const newActivity: ActivityItem = {
-      id: `act-${Date.now()}`,
-      title: task ? task.title : 'Task',
-      description: `Task completed with photo proof by ${userProfile.name}.`,
-      type: 'completed',
-      user: userProfile.name,
-      time: nowTime,
-      date: '14/08/2026',
-      statusBadge: 'Completed with Proof',
-    };
-    setActivities((prev) => [newActivity, ...prev]);
-
-    playChime();
-    showToast('Task marked complete with photo proof!');
+    if (!task) return;
+    const willComplete = !task.completed;
+    tasksHook
+      .toggleComplete(task)
+      .then(() => {
+        if (willComplete) {
+          playChime();
+          showToast(t.toastTaskCompleted);
+        } else {
+          showToast(t.toastTaskReopened, 'info');
+        }
+      })
+      .catch(onError);
   };
 
-  const attachPhotoToTask = (taskId: string, photo: TaskPhotoProof) => {
-    setTasks((prev) =>
-      prev.map((tItem) => {
-        if (tItem.id === taskId) {
-          return {
-            ...tItem,
-            photos: [...(tItem.photos || []), photo],
-          };
-        }
-        return tItem;
+  const completeTaskWithPhoto = (taskId: string, blob: Blob, caption?: string) => {
+    tasksHook
+      .completeWithPhoto({ taskId, blob, caption })
+      .then(() => {
+        playChime();
+        showToast('Task marked complete with photo proof!');
       })
-    );
-    showToast('Photo proof attached to task!');
+      .catch(onError);
+  };
+
+  const attachPhotoToTask = (taskId: string, blob: Blob, caption?: string) => {
+    tasksHook
+      .attachPhoto({ taskId, blob, caption })
+      .then(() => showToast('Photo proof attached to task!'))
+      .catch(onError);
   };
 
   const removePhotoFromTask = (taskId: string, photoId: string) => {
-    setTasks((prev) =>
-      prev.map((tItem) => {
-        if (tItem.id === taskId) {
-          return {
-            ...tItem,
-            photos: (tItem.photos || []).filter((p) => p.id !== photoId),
-          };
-        }
-        return tItem;
-      })
-    );
-    showToast('Photo removed', 'info');
+    const task = tasks.find((tItem) => tItem.id === taskId);
+    const photo = task?.photos?.find((p) => p.id === photoId);
+    if (!photo) return;
+    tasksHook
+      .removePhoto({ id: photo.id, storagePath: photo.storagePath })
+      .then(() => showToast('Photo removed', 'info'))
+      .catch(onError);
   };
 
   const deleteTask = (taskId: string) => {
-    setTasks((prev) => prev.filter((tItem) => tItem.id !== taskId));
-    showToast('Task removed', 'info');
+    tasksHook
+      .deleteTask(taskId)
+      .then(() => showToast('Task removed', 'info'))
+      .catch(onError);
   };
 
   const toggleCommunicationComplete = (commId: string) => {
-    setCommunications((prev) =>
-      prev.map((c) => {
-        if (c.id === commId) {
-          const nextState = !c.isCompleted;
-          const nowTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
-          const newActivity: ActivityItem = {
-            id: `act-${Date.now()}`,
-            title: c.title,
-            description: nextState ? 'Communication confirmed and signed off.' : 'Communication marked pending.',
-            type: nextState ? 'completed' : 'updated',
-            user: userProfile.name,
-            time: nowTime,
-            date: '14/08/2026',
-            statusBadge: nextState ? 'Completed' : 'Updated',
-          };
-          setActivities((a) => [newActivity, ...a]);
-
-          if (nextState) {
-            playChime();
-            showToast(t.toastTaskCompleted);
-          }
-
-          return {
-            ...c,
-            isCompleted: nextState,
-            completedBy: nextState ? userProfile.name : undefined,
-            completedAt: nextState ? '14/08/2026' : undefined,
-          };
+    const comm = communications.find((c) => c.id === commId);
+    if (!comm) return;
+    const nextState = !comm.isCompleted;
+    commsHook
+      .toggleComplete(comm)
+      .then(() => {
+        if (nextState) {
+          playChime();
+          showToast(t.toastTaskCompleted);
         }
-        return c;
       })
-    );
+      .catch(onError);
+  };
+
+  const deleteCommunication = (commId: string) => {
+    commsHook
+      .deleteCommunication(commId)
+      .then(() => showToast('Communication removed', 'info'))
+      .catch(onError);
   };
 
   const addNoteToTask = (taskId: string, noteText: string) => {
     if (!noteText.trim()) return;
-    setTasks((prev) =>
-      prev.map((tItem) => {
-        if (tItem.id === taskId) {
-          return {
-            ...tItem,
-            notes: [...(tItem.notes || []), noteText.trim()],
-          };
-        }
-        return tItem;
-      })
-    );
-
-    const task = tasks.find((tItem) => tItem.id === taskId);
-    const nowTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
-    const newActivity: ActivityItem = {
-      id: `act-${Date.now()}`,
-      title: task ? task.title : 'Task',
-      description: `Note added: "${noteText.trim().slice(0, 40)}${noteText.length > 40 ? '...' : ''}"`,
-      type: 'note_added',
-      user: userProfile.name,
-      time: nowTime,
-      date: '14/08/2026',
-    };
-    setActivities((prev) => [newActivity, ...prev]);
-    showToast('Note added to task!');
+    tasksHook
+      .addNote({ taskId, body: noteText })
+      .then(() => showToast('Note added to task!'))
+      .catch(onError);
   };
 
   const addNoteToComm = (commId: string, noteText: string) => {
     if (!noteText.trim()) return;
-    setCommunications((prev) =>
-      prev.map((c) => {
-        if (c.id === commId) {
-          return {
-            ...c,
-            notes: [...(c.notes || []), noteText.trim()],
-          };
-        }
-        return c;
-      })
-    );
-    showToast('Note added to communication');
+    commsHook
+      .addNote({ communicationId: commId, body: noteText })
+      .then(() => showToast('Note added to communication'))
+      .catch(onError);
   };
 
   const addPersonalNote = (text: string) => {
     if (!text.trim()) return;
-    const newNote: MyNote = {
-      id: `note-${Date.now()}`,
-      text: text.trim(),
-      completed: false,
-      createdAt: '14/08/2026, ' + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }),
-    };
-    setNotes((prev) => [newNote, ...prev]);
-
-    const nowTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
-    const newActivity: ActivityItem = {
-      id: `act-${Date.now()}`,
-      title: 'My Tasks & Notes',
-      description: `New note added: "${text.trim().slice(0, 30)}..."`,
-      type: 'note_added',
-      user: userProfile.name,
-      time: nowTime,
-      date: '14/08/2026',
-    };
-    setActivities((prev) => [newActivity, ...prev]);
-    showToast('Note added to My Tasks & Notes');
+    personalNotesHook
+      .addNote(text)
+      .then(() => showToast('Note added to My Tasks & Notes'))
+      .catch(onError);
   };
 
   const togglePersonalNote = (noteId: string) => {
-    setNotes((prev) =>
-      prev.map((n) => (n.id === noteId ? { ...n, completed: !n.completed } : n))
-    );
+    personalNotesHook.toggleNote(noteId).catch(onError);
   };
 
   const deletePersonalNote = (noteId: string) => {
-    setNotes((prev) => prev.filter((n) => n.id !== noteId));
-    showToast('Note deleted', 'info');
+    personalNotesHook
+      .deleteNote(noteId)
+      .then(() => showToast('Note deleted', 'info'))
+      .catch(onError);
   };
 
   const snoozeTask = (taskId: string, hours: number = 2) => {
-    const task = tasks.find((tItem) => tItem.id === taskId);
-    const nowTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
-    const newActivity: ActivityItem = {
-      id: `act-${Date.now()}`,
-      title: task ? task.title : 'Task',
-      description: `Reminder snoozed for ${hours} hours.`,
-      type: 'snoozed',
-      user: userProfile.name,
-      time: nowTime,
-      date: '14/08/2026',
-    };
-    setActivities((prev) => [newActivity, ...prev]);
-    showToast(`${t.snoozedFor2Hours}`, 'info');
+    tasksHook
+      .snoozeTask({ taskId, hours })
+      .then(() => showToast(`${t.snoozedFor2Hours}`, 'info'))
+      .catch(onError);
   };
 
   const updateUserProfile = (updates: Partial<UserProfile>) => {
-    setUserProfile((prev) => ({ ...prev, ...updates }));
+    updateProfile(updates)
+      .then(() => showToast(t.toastProfileUpdated || 'Profile updated successfully!'))
+      .catch(onError);
   };
 
   const clearCache = () => {
-    localStorage.removeItem(STORAGE_KEYS.TASKS);
-    localStorage.removeItem(STORAGE_KEYS.COMMUNICATIONS);
-    localStorage.removeItem(STORAGE_KEYS.NOTES);
-    localStorage.removeItem(STORAGE_KEYS.ACTIVITIES);
-    setTasks(INITIAL_TASKS);
-    setCommunications(INITIAL_COMMUNICATIONS);
-    setNotes(INITIAL_NOTES);
-    setActivities(INITIAL_ACTIVITIES);
-    showToast(t.toastCacheCleared || 'Local storage cleared!', 'info');
+    queryClient.clear();
+    try {
+      localStorage.removeItem(NOTIFICATION_READ_STORAGE_KEY);
+    } catch {
+      // ignore
+    }
+    showToast(t.toastCacheCleared || 'Local cache cleared — refetching from server.', 'info');
   };
 
   const syncData = () => {
+    void queryClient.invalidateQueries();
     playChime();
     showToast(t.toastSynced || 'Data synchronized with central retail server!', 'success');
+  };
+
+  const signOut = () => {
+    void authSignOut();
   };
 
   // Counts
@@ -651,6 +462,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         goToNextMonth,
         goToPrevMonth,
         goToToday,
+        isLoading,
         tasks,
         communications,
         notes,
@@ -672,6 +484,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         removePhotoFromTask,
         deleteTask,
         toggleCommunicationComplete,
+        deleteCommunication,
         addNoteToTask,
         addNoteToComm,
         addPersonalNote,
@@ -682,6 +495,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         clearCache,
         syncData,
         playChime,
+        signOut,
         isAddTaskModalOpen,
         setIsAddTaskModalOpen,
         isLegendModalOpen,
@@ -710,6 +524,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     </AppContext.Provider>
   );
 };
+
+function toIsoDate(d: Date): string {
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}`;
+}
 
 export const useApp = () => {
   const context = useContext(AppContext);

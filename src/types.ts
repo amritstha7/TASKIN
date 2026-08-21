@@ -16,7 +16,8 @@ export type TaskCategory =
 
 export interface TaskPhotoProof {
   id: string;
-  url: string; // base64 or URL
+  url: string; // signed URL, resolved at read time
+  storagePath: string; // used internally to delete the underlying storage object
   name?: string;
   caption?: string;
   uploadedAt: string;
@@ -80,6 +81,7 @@ export interface ActivityItem {
 }
 
 export interface UserProfile {
+  id: string;
   name: string;
   email: string;
   role: string;
@@ -103,14 +105,6 @@ export interface TopPerformer {
   rank: number;
   avatar?: string;
   initials?: string;
-}
-
-export interface WeeklyVolumeItem {
-  day: string;
-  shortDay: string;
-  volume: number;
-  percentage: number;
-  isToday?: boolean;
 }
 
 export type ScreenType =

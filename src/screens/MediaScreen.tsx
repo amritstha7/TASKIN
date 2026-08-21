@@ -1,7 +1,12 @@
 import React, { useState, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useApp } from '../context/AppContext';
+import { useCommunications } from '../hooks/useCommunications';
+import { useMediaNotes } from '../hooks/useMediaNotes';
+import { resizeImageToBlob } from '../lib/canvasResize';
 import { TaskPhotoProof } from '../types';
+
+const MEDIA_NOTE_CATEGORIES = ['General', 'Compliance & Safety', 'Inventory', 'Merchandising', 'Maintenance', 'Training'];
 
 interface MediaItem extends TaskPhotoProof {
   sourceType: 'urgent' | 'task' | 'comm' | 'direct';
@@ -11,30 +16,24 @@ interface MediaItem extends TaskPhotoProof {
 }
 
 export const MediaScreen: React.FC = () => {
-  const {
-    tasks,
-    communications,
-    setPreviewPhoto,
-    removePhotoFromTask,
-    attachPhotoToTask,
-    userProfile,
-    showToast,
-    playChime,
-    t,
-  } = useApp();
+  const { tasks, communications, setPreviewPhoto, removePhotoFromTask, attachPhotoToTask, showToast, playChime, t } = useApp();
+  const { removePhoto: removeCommPhoto } = useCommunications();
+  const { mediaNotes, createMediaNote, deleteMediaNote } = useMediaNotes();
 
   const [activeFilter, setActiveFilter] = useState<'all' | 'urgent' | 'task' | 'comm' | 'direct'>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
 
   // Upload Form State
-  const [uploadFile, setUploadFile] = useState<string | null>(null);
-  const [uploadFileName, setUploadFileName] = useState<string>('');
+  const [uploadPreviewUrl, setUploadPreviewUrl] = useState<string | null>(null);
+  const [uploadBlob, setUploadBlob] = useState<Blob | null>(null);
   const [uploadCaption, setUploadCaption] = useState('');
   const [selectedTaskId, setSelectedTaskId] = useState<string>('');
+  const [mediaNoteName, setMediaNoteName] = useState('');
+  const [mediaNoteCategory, setMediaNoteCategory] = useState(MEDIA_NOTE_CATEGORIES[0]);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
-  // Aggregate all photos across tasks & communications
+  // Aggregate all photos across tasks, communications & standalone media notes
   const allMediaItems: MediaItem[] = [];
 
   tasks.forEach((task) => {
@@ -64,11 +63,28 @@ export const MediaScreen: React.FC = () => {
     }
   });
 
+  mediaNotes.forEach((note) => {
+    allMediaItems.push({
+      id: note.id,
+      url: note.url,
+      storagePath: note.storagePath,
+      name: note.name,
+      caption: note.caption,
+      uploadedAt: note.uploadedAt,
+      uploadedBy: note.uploadedByName,
+      sourceType: 'direct',
+      sourceTitle: note.name,
+      sourceId: note.id,
+      category: note.category,
+    });
+  });
+
   // Filter and search
   const filteredMedia = allMediaItems.filter((item) => {
     if (activeFilter === 'urgent' && item.sourceType !== 'urgent') return false;
     if (activeFilter === 'task' && item.sourceType !== 'task') return false;
     if (activeFilter === 'comm' && item.sourceType !== 'comm') return false;
+    if (activeFilter === 'direct' && item.sourceType !== 'direct') return false;
 
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
@@ -82,49 +98,50 @@ export const MediaScreen: React.FC = () => {
     return true;
   });
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
-      setUploadFileName(file.name);
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        if (event.target?.result) {
-          setUploadFile(event.target.result as string);
-        }
-      };
-      reader.readAsDataURL(file);
+    if (!file) return;
+    try {
+      const blob = await resizeImageToBlob(file, 1200, 0.85);
+      if (uploadPreviewUrl) URL.revokeObjectURL(uploadPreviewUrl);
+      setUploadBlob(blob);
+      setUploadPreviewUrl(URL.createObjectURL(blob));
+    } catch {
+      showToast('Failed to process image', 'error');
     }
   };
 
-  const handleSaveUpload = (e: React.FormEvent) => {
+  const handleSaveUpload = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!uploadFile) {
+    if (!uploadBlob) {
       showToast('Please select or capture a photo first', 'error');
       return;
     }
 
-    const newPhoto: TaskPhotoProof = {
-      id: `media-${Date.now()}`,
-      url: uploadFile,
-      name: uploadFileName || 'uploaded_photo.jpg',
-      caption: uploadCaption.trim() || 'Visual store compliance proof',
-      uploadedAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }),
-      uploadedBy: userProfile.name,
-    };
+    try {
+      if (selectedTaskId) {
+        attachPhotoToTask(selectedTaskId, uploadBlob, uploadCaption.trim() || 'Visual store compliance proof');
+      } else {
+        if (!mediaNoteName.trim()) {
+          showToast('Please name this photo note', 'error');
+          return;
+        }
+        await createMediaNote({ blob: uploadBlob, name: mediaNoteName, category: mediaNoteCategory, caption: uploadCaption });
+      }
 
-    // Attach to target task or the first available task
-    const targetTaskId = selectedTaskId || tasks[0]?.id;
-    if (targetTaskId) {
-      attachPhotoToTask(targetTaskId, newPhoto);
+      playChime();
+      showToast('Photo uploaded and added to Media Gallery!', 'success');
+      setIsUploadModalOpen(false);
+      if (uploadPreviewUrl) URL.revokeObjectURL(uploadPreviewUrl);
+      setUploadPreviewUrl(null);
+      setUploadBlob(null);
+      setUploadCaption('');
+      setSelectedTaskId('');
+      setMediaNoteName('');
+      setMediaNoteCategory(MEDIA_NOTE_CATEGORIES[0]);
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Upload failed', 'error');
     }
-
-    playChime();
-    showToast('Photo uploaded and added to Media Gallery!', 'success');
-    setIsUploadModalOpen(false);
-    setUploadFile(null);
-    setUploadFileName('');
-    setUploadCaption('');
-    setSelectedTaskId('');
   };
 
   const handleDownloadPhoto = (url: string, filename?: string) => {
@@ -138,10 +155,13 @@ export const MediaScreen: React.FC = () => {
   };
 
   const handleDeletePhoto = (item: MediaItem) => {
-    if (item.sourceId && item.sourceType !== 'comm') {
-      removePhotoFromTask(item.sourceId, item.id);
+    if (!item.sourceId) return;
+    if (item.sourceType === 'comm') {
+      void removeCommPhoto({ id: item.id, storagePath: item.storagePath }).then(() => showToast('Photo removed', 'info'));
+    } else if (item.sourceType === 'direct') {
+      void deleteMediaNote({ id: item.id, storagePath: item.storagePath }).then(() => showToast('Photo removed', 'info'));
     } else {
-      showToast('Photo removed from view', 'info');
+      removePhotoFromTask(item.sourceId, item.id);
     }
   };
 
@@ -212,6 +232,26 @@ export const MediaScreen: React.FC = () => {
             }`}
           >
             {t.filterByTask} ({allMediaItems.filter((i) => i.sourceType === 'task').length})
+          </button>
+          <button
+            onClick={() => setActiveFilter('comm')}
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
+              activeFilter === 'comm'
+                ? 'bg-[#FF5500] text-white shadow-xs'
+                : 'bg-white dark:bg-[#191c1f] text-[#8E8E93] dark:text-[#8e9095] border border-[#e5e5ea] dark:border-[#35383c] hover:text-[#2C2C2E] dark:hover:text-white'
+            }`}
+          >
+            Communications ({allMediaItems.filter((i) => i.sourceType === 'comm').length})
+          </button>
+          <button
+            onClick={() => setActiveFilter('direct')}
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
+              activeFilter === 'direct'
+                ? 'bg-[#FF5500] text-white shadow-xs'
+                : 'bg-white dark:bg-[#191c1f] text-[#8E8E93] dark:text-[#8e9095] border border-[#e5e5ea] dark:border-[#35383c] hover:text-[#2C2C2E] dark:hover:text-white'
+            }`}
+          >
+            Notes ({allMediaItems.filter((i) => i.sourceType === 'direct').length})
           </button>
         </div>
 
@@ -298,7 +338,13 @@ export const MediaScreen: React.FC = () => {
                         : 'bg-[#FF5500]/90 border border-white/30'
                     }`}
                   >
-                    {item.sourceType === 'urgent' ? 'Urgent' : 'Task Proof'}
+                    {item.sourceType === 'urgent'
+                      ? 'Urgent'
+                      : item.sourceType === 'comm'
+                      ? 'Communication'
+                      : item.sourceType === 'direct'
+                      ? 'Note'
+                      : 'Task Proof'}
                   </span>
                   {item.category && (
                     <span className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-black/60 text-white backdrop-blur-xs border border-white/20">
@@ -402,22 +448,23 @@ export const MediaScreen: React.FC = () => {
                     type="file"
                     ref={fileInputRef}
                     accept="image/*"
-                    onChange={handleFileChange}
+                    onChange={(e) => void handleFileChange(e)}
                     className="hidden"
                   />
 
-                  {uploadFile ? (
+                  {uploadPreviewUrl ? (
                     <div className="relative rounded-xl overflow-hidden border border-[#FFD8CC] dark:border-[#5d3f3c] max-h-56 bg-black flex items-center justify-center">
                       <img
-                        src={uploadFile}
+                        src={uploadPreviewUrl}
                         alt="Preview"
                         className="max-h-56 w-full object-contain"
                       />
                       <button
                         type="button"
                         onClick={() => {
-                          setUploadFile(null);
-                          setUploadFileName('');
+                          URL.revokeObjectURL(uploadPreviewUrl);
+                          setUploadPreviewUrl(null);
+                          setUploadBlob(null);
                         }}
                         className="absolute top-2 right-2 bg-black/70 text-white p-1.5 rounded-full hover:bg-black"
                       >
@@ -452,7 +499,7 @@ export const MediaScreen: React.FC = () => {
                     onChange={(e) => setSelectedTaskId(e.target.value)}
                     className="w-full p-2 bg-white dark:bg-[#25282c] border border-[#e5e5ea] dark:border-[#35383c] rounded-xl text-xs text-[#2C2C2E] dark:text-[#eff1f5] focus:outline-none focus:border-[#FF5500]"
                   >
-                    <option value="">General Store Compliance Proof</option>
+                    <option value="">General — save as a standalone photo note</option>
                     {tasks.map((task) => (
                       <option key={task.id} value={task.id}>
                         {task.isUrgent ? '🔴 ' : '📋 '} {task.title} ({task.category})
@@ -460,6 +507,35 @@ export const MediaScreen: React.FC = () => {
                     ))}
                   </select>
                 </div>
+
+                {!selectedTaskId && (
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-bold text-[#8E8E93] dark:text-[#8e9095] mb-1">Note Name</label>
+                      <input
+                        type="text"
+                        value={mediaNoteName}
+                        onChange={(e) => setMediaNoteName(e.target.value)}
+                        placeholder="e.g. Aisle 4 endcap"
+                        className="w-full p-2 bg-white dark:bg-[#25282c] border border-[#e5e5ea] dark:border-[#35383c] rounded-xl text-xs text-[#2C2C2E] dark:text-[#eff1f5] focus:outline-none focus:border-[#FF5500]"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-[#8E8E93] dark:text-[#8e9095] mb-1">Category</label>
+                      <select
+                        value={mediaNoteCategory}
+                        onChange={(e) => setMediaNoteCategory(e.target.value)}
+                        className="w-full p-2 bg-white dark:bg-[#25282c] border border-[#e5e5ea] dark:border-[#35383c] rounded-xl text-xs text-[#2C2C2E] dark:text-[#eff1f5] focus:outline-none focus:border-[#FF5500]"
+                      >
+                        {MEDIA_NOTE_CATEGORIES.map((cat) => (
+                          <option key={cat} value={cat}>
+                            {cat}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                )}
 
                 {/* Caption / Proof Notes */}
                 <div>
@@ -487,9 +563,9 @@ export const MediaScreen: React.FC = () => {
                   <motion.button
                     type="submit"
                     whileTap={{ scale: 0.96 }}
-                    disabled={!uploadFile}
+                    disabled={!uploadBlob}
                     className={`px-4 py-2 rounded-xl text-xs font-bold text-white transition-all shadow-md ${
-                      uploadFile
+                      uploadBlob
                         ? 'bg-[#FF5500] hover:bg-[#E04800] cursor-pointer'
                         : 'bg-[#FF5500]/50 cursor-not-allowed'
                     }`}

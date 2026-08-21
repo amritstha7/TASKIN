@@ -22,6 +22,7 @@ export const SettingsScreen: React.FC = () => {
     calendarMode,
     setCalendarMode,
     tasks,
+    signOut,
   } = useApp();
 
   const [activeSubPage, setActiveSubPage] = useState<SettingsSubPage>(null);
@@ -1079,6 +1080,17 @@ export const SettingsScreen: React.FC = () => {
           </button>
         </div>
       </section>
+
+      {/* Sign Out */}
+      <motion.button
+        whileHover={{ scale: 1.01 }}
+        whileTap={{ scale: 0.98 }}
+        onClick={() => signOut()}
+        className="w-full flex items-center justify-center gap-2 p-4 rounded-2xl bg-[#ffebee] dark:bg-[#4a2424] text-[#d81b1b] font-bold text-xs hover:bg-[#ffd9dc] dark:hover:bg-[#5a2c2c] transition-colors cursor-pointer"
+      >
+        <span className="material-symbols-outlined text-[18px]">logout</span>
+        {t.logout}
+      </motion.button>
     </motion.div>
   );
 
@@ -1111,7 +1123,7 @@ export const SettingsScreen: React.FC = () => {
                   Clear Local Cache?
                 </h3>
                 <p className="text-xs text-[#8E8E93] dark:text-[#d8dade] mt-1">
-                  This will reset all locally stored tasks, notes, and activity logs to default state.
+                  This clears locally cached data and re-fetches everything fresh from the server. Nothing on the server is deleted.
                 </p>
               </div>
               <div className="flex gap-2 justify-end pt-2">
@@ -1129,7 +1141,7 @@ export const SettingsScreen: React.FC = () => {
                   }}
                   className="px-4 py-2 rounded-xl text-xs font-bold bg-[#FF5500] text-white hover:bg-[#E04800] cursor-pointer"
                 >
-                  Confirm Reset
+                  Clear &amp; Refetch
                 </button>
               </div>
             </motion.div>

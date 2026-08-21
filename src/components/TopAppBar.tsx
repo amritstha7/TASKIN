@@ -1,7 +1,9 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useApp } from '../context/AppContext';
+import { useNotifications } from '../hooks/useNotifications';
 import { GlobalSearchBar } from './GlobalSearchBar';
+import { BrandMark } from './BrandMark';
 
 export const TopAppBar: React.FC = () => {
   const {
@@ -11,9 +13,10 @@ export const TopAppBar: React.FC = () => {
     t,
     setIsNotificationsOpen,
     setIsEditProfileModalOpen,
-    urgentTasksCount,
     setCurrentScreen,
+    signOut,
   } = useApp();
+  const { unreadCount } = useNotifications();
 
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
 
@@ -27,15 +30,14 @@ export const TopAppBar: React.FC = () => {
             className="flex items-center gap-2.5 group cursor-pointer focus:outline-none"
             aria-label="TASKN Dashboard"
           >
-            {/* 3D animated Logo badge */}
+            {/* Animated Logo badge */}
             <motion.div
               whileHover={{ scale: 1.08, rotate: [0, -4, 4, 0] }}
               whileTap={{ scale: 0.95 }}
-              className="w-9 h-9 md:w-10 md:h-10 rounded-xl bg-gradient-to-br from-[#FF5500] to-[#FF3300] dark:from-[#b60013] dark:to-[#85000c] text-white flex items-center justify-center shadow-[0_4px_14px_rgba(255,85,0,0.35)] dark:shadow-[0_4px_14px_rgba(182,0,19,0.4)]"
+              className="shadow-[0_4px_14px_rgba(224,72,0,0.35)]"
+              style={{ borderRadius: 10 }}
             >
-              <span className="material-symbols-outlined text-[22px] md:text-[24px]">
-                storefront
-              </span>
+              <BrandMark size={36} />
             </motion.div>
 
             <div className="text-left hidden xs:block">
@@ -69,9 +71,9 @@ export const TopAppBar: React.FC = () => {
             id="header-notifications-button"
           >
             <span className="material-symbols-outlined text-[20px]">notifications</span>
-            {urgentTasksCount > 0 && (
+            {unreadCount > 0 && (
               <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-[#FF5500] dark:bg-[#ba1a1a] text-white text-[9px] font-black flex items-center justify-center animate-pulse ring-2 ring-white dark:ring-[#191c1f]">
-                {urgentTasksCount}
+                {unreadCount}
               </span>
             )}
           </motion.button>
@@ -150,6 +152,19 @@ export const TopAppBar: React.FC = () => {
                       </span>
                       {isDarkMode ? t.themeLight : t.themeDark}
                     </span>
+                  </button>
+
+                  <div className="border-t border-[#e5e5ea] dark:border-[#35383c] my-1" />
+
+                  <button
+                    onClick={() => {
+                      setIsUserMenuOpen(false);
+                      void signOut();
+                    }}
+                    className="w-full flex items-center gap-2 px-2.5 py-2 rounded-xl text-xs font-medium text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors text-left cursor-pointer"
+                  >
+                    <span className="material-symbols-outlined text-[18px]">logout</span>
+                    Sign Out
                   </button>
                 </motion.div>
               )}

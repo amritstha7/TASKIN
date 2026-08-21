@@ -1,7 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useApp } from '../context/AppContext';
-import { TaskPhotoProof } from '../types';
+import { resizeImageToBlob } from '../lib/canvasResize';
 
 const SAMPLE_PROOF_PRESETS = [
   {
@@ -38,6 +38,7 @@ export const TaskPhotoProofModal: React.FC = () => {
   } = useApp();
 
   const [photoUrl, setPhotoUrl] = useState<string>('');
+  const [photoBlob, setPhotoBlob] = useState<Blob | null>(null);
   const [photoCaption, setPhotoCaption] = useState<string>('');
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
   const [dragActive, setDragActive] = useState<boolean>(false);
@@ -47,72 +48,52 @@ export const TaskPhotoProofModal: React.FC = () => {
 
   if (!photoProofModalTask) return null;
 
-  const processImageFile = (file: File) => {
+  const clearPhoto = () => {
+    if (photoUrl.startsWith('blob:')) URL.revokeObjectURL(photoUrl);
+    setPhotoUrl('');
+    setPhotoBlob(null);
+  };
+
+  const processImageFile = async (file: File) => {
     if (!file.type.startsWith('image/')) {
       showToast('Please select a valid image file', 'error');
       return;
     }
 
     setIsProcessing(true);
-    const reader = new FileReader();
-
-    reader.onload = (event) => {
-      const img = new Image();
-      img.onload = () => {
-        const canvas = document.createElement('canvas');
-        const MAX_WIDTH = 1200;
-        const MAX_HEIGHT = 1200;
-        let width = img.width;
-        let height = img.height;
-
-        if (width > height) {
-          if (width > MAX_WIDTH) {
-            height = Math.round((height * MAX_WIDTH) / width);
-            width = MAX_WIDTH;
-          }
-        } else {
-          if (height > MAX_HEIGHT) {
-            width = Math.round((width * MAX_HEIGHT) / height);
-            height = MAX_HEIGHT;
-          }
-        }
-
-        canvas.width = width;
-        canvas.height = height;
-        const ctx = canvas.getContext('2d');
-        if (ctx) {
-          ctx.drawImage(img, 0, 0, width, height);
-          const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.85);
-          setPhotoUrl(compressedDataUrl);
-          if (!photoCaption) {
-            setPhotoCaption(`Proof captured by ${userProfile.name} on ${new Date().toLocaleDateString()}`);
-          }
-          showToast('Photo proof ready!', 'success');
-        }
-        setIsProcessing(false);
-      };
-
-      img.onerror = () => {
-        setIsProcessing(false);
-        showToast('Failed to load image file', 'error');
-      };
-
-      if (event.target?.result) {
-        img.src = event.target.result as string;
+    try {
+      const blob = await resizeImageToBlob(file, 1200, 0.85);
+      setPhotoBlob(blob);
+      setPhotoUrl(URL.createObjectURL(blob));
+      if (!photoCaption) {
+        setPhotoCaption(`Proof captured by ${userProfile.name} on ${new Date().toLocaleDateString()}`);
       }
-    };
-
-    reader.onerror = () => {
+      showToast('Photo proof ready!', 'success');
+    } catch {
+      showToast('Failed to load image file', 'error');
+    } finally {
       setIsProcessing(false);
-      showToast('Error reading image from storage', 'error');
-    };
+    }
+  };
 
-    reader.readAsDataURL(file);
+  const usePresetProof = async (preset: (typeof SAMPLE_PROOF_PRESETS)[number]) => {
+    setIsProcessing(true);
+    try {
+      const response = await fetch(preset.url);
+      const blob = await response.blob();
+      setPhotoBlob(blob);
+      setPhotoUrl(preset.url);
+      setPhotoCaption(preset.caption);
+    } catch {
+      showToast('Failed to load sample proof', 'error');
+    } finally {
+      setIsProcessing(false);
+    }
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
-      processImageFile(e.target.files[0]);
+      void processImageFile(e.target.files[0]);
     }
   };
 
@@ -131,47 +112,31 @@ export const TaskPhotoProofModal: React.FC = () => {
     e.stopPropagation();
     setDragActive(false);
     if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-      processImageFile(e.dataTransfer.files[0]);
+      void processImageFile(e.dataTransfer.files[0]);
     }
   };
 
   const handleCompleteWithProof = () => {
-    if (!photoUrl) {
+    if (!photoBlob) {
       showToast('Please capture or choose a photo proof first', 'error');
       return;
     }
 
-    const proof: TaskPhotoProof = {
-      id: `proof-${Date.now()}`,
-      url: photoUrl,
-      caption: photoCaption.trim() || 'Task completion photo proof',
-      uploadedAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }),
-      uploadedBy: userProfile.name,
-    };
-
-    completeTaskWithPhoto(photoProofModalTask.id, proof, photoCaption.trim());
+    completeTaskWithPhoto(photoProofModalTask.id, photoBlob, photoCaption.trim() || 'Task completion photo proof');
     setPhotoProofModalTask(null);
-    setPhotoUrl('');
+    clearPhoto();
     setPhotoCaption('');
   };
 
   const handleAttachOnly = () => {
-    if (!photoUrl) {
+    if (!photoBlob) {
       showToast('Please capture or choose a photo proof first', 'error');
       return;
     }
 
-    const proof: TaskPhotoProof = {
-      id: `proof-${Date.now()}`,
-      url: photoUrl,
-      caption: photoCaption.trim() || 'Attached task photo evidence',
-      uploadedAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }),
-      uploadedBy: userProfile.name,
-    };
-
-    attachPhotoToTask(photoProofModalTask.id, proof);
+    attachPhotoToTask(photoProofModalTask.id, photoBlob, photoCaption.trim() || 'Attached task photo evidence');
     setPhotoProofModalTask(null);
-    setPhotoUrl('');
+    clearPhoto();
     setPhotoCaption('');
   };
 
@@ -206,7 +171,7 @@ export const TaskPhotoProofModal: React.FC = () => {
             type="button"
             onClick={() => {
               setPhotoProofModalTask(null);
-              setPhotoUrl('');
+              clearPhoto();
               setPhotoCaption('');
             }}
             className="p-1.5 text-[#8E8E93] hover:text-[#2C2C2E] dark:hover:text-white rounded-lg transition-colors cursor-pointer hover:bg-black/5 dark:hover:bg-white/5"
@@ -240,7 +205,7 @@ export const TaskPhotoProofModal: React.FC = () => {
               {photoUrl && (
                 <button
                   type="button"
-                  onClick={() => setPhotoUrl('')}
+                  onClick={clearPhoto}
                   className="text-[10px] text-[#FF5500] dark:text-[#ffb4ac] hover:underline cursor-pointer"
                 >
                   Clear Photo
@@ -338,10 +303,7 @@ export const TaskPhotoProofModal: React.FC = () => {
                 <button
                   key={idx}
                   type="button"
-                  onClick={() => {
-                    setPhotoUrl(preset.url);
-                    setPhotoCaption(preset.caption);
-                  }}
+                  onClick={() => void usePresetProof(preset)}
                   className={`flex items-center gap-2 p-2 rounded-xl border text-left transition-all cursor-pointer ${
                     photoUrl === preset.url
                       ? 'border-[#FF5500] bg-[#FFF0EB] dark:bg-[#35383c]'
@@ -387,7 +349,7 @@ export const TaskPhotoProofModal: React.FC = () => {
             type="button"
             onClick={() => {
               setPhotoProofModalTask(null);
-              setPhotoUrl('');
+              clearPhoto();
               setPhotoCaption('');
             }}
             className="px-4 py-2.5 border border-[#e5e5ea] dark:border-[#35383c] rounded-xl hover:bg-white dark:hover:bg-[#191c1f] font-bold text-xs text-[#2C2C2E] dark:text-[#eff1f5] cursor-pointer transition-colors"

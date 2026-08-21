@@ -76,14 +76,14 @@ export const NotesScreen: React.FC = () => {
       {/* Add New Note Input Form */}
       <form
         onSubmit={handleAddNote}
-        className="bg-white dark:bg-[#191c1f] p-3 rounded-2xl border border-[#FFD8CC] dark:border-[#5d3f3c] shadow-sm flex gap-2 items-center"
+        className="bg-white dark:bg-[#191c1f] p-3 rounded-2xl border border-[#FFD8CC] dark:border-[#5d3f3c] shadow-sm flex gap-2 items-end"
       >
-        <input
-          type="text"
+        <textarea
+          rows={1}
           value={newNoteText}
           onChange={(e) => setNewNoteText(e.target.value)}
           placeholder="Add a new quick note, checklist item, or reminder..."
-          className="flex-1 text-xs md:text-sm bg-transparent px-3 py-2 text-[#2C2C2E] dark:text-[#eff1f5] focus:outline-none placeholder:text-[#8E8E93]"
+          className="flex-1 text-xs md:text-sm bg-transparent px-3 py-2 text-[#2C2C2E] dark:text-[#eff1f5] focus:outline-none placeholder:text-[#8E8E93] resize-none"
         />
         <button
           type="submit"

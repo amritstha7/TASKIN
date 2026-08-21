@@ -371,19 +371,16 @@ export const StoreTasksScreen: React.FC = () => {
                   animate={{ opacity: 1, y: 0 }}
                   className="mt-3 pt-3 border-t border-[#e5e5ea] dark:border-[#35383c] flex gap-2"
                 >
-                  <input
-                    type="text"
+                  <textarea
+                    rows={2}
                     value={taskNoteInput}
                     onChange={(e) => setTaskNoteInput(e.target.value)}
                     placeholder="Type operational update..."
-                    className="flex-1 text-xs border border-[#e5e5ea] dark:border-[#5d3f3c] rounded-xl px-3 py-2 bg-white dark:bg-[#191c1f] text-[#2C2C2E] dark:text-[#eff1f5] focus:outline-none focus:border-[#FF5500]"
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') handleSaveNote(task.id);
-                    }}
+                    className="flex-1 text-xs border border-[#e5e5ea] dark:border-[#5d3f3c] rounded-xl px-3 py-2 bg-white dark:bg-[#191c1f] text-[#2C2C2E] dark:text-[#eff1f5] focus:outline-none focus:border-[#FF5500] resize-none"
                   />
                   <button
                     onClick={() => handleSaveNote(task.id)}
-                    className="bg-[#FF5500] text-white px-4 py-2 rounded-xl text-xs font-bold hover:bg-[#E04800] transition-colors cursor-pointer"
+                    className="bg-[#FF5500] text-white px-4 py-2 rounded-xl text-xs font-bold hover:bg-[#E04800] transition-colors cursor-pointer self-start"
                   >
                     {t.save}
                   </button>

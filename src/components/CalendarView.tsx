@@ -50,6 +50,8 @@ export const CalendarView: React.FC = () => {
     return (day + 6) % 7;
   };
 
+  const todayString = formatDayString(new Date().getFullYear(), new Date().getMonth(), new Date().getDate());
+
   const daysInCurrentMonth = getDaysInMonth(calendarYear, calendarMonth);
   const firstDayIndex = getFirstDayOfWeek(calendarYear, calendarMonth);
 
@@ -108,55 +110,6 @@ export const CalendarView: React.FC = () => {
     const hasCompleted = dayTasks.some((taskItem) => taskItem.completed);
     const hasPending = dayTasks.some((taskItem) => !taskItem.completed && !taskItem.isUrgent);
 
-    // Explicit presets for August 2026
-    if (calendarMonth === 7 && calendarYear === 2026) {
-      if (day === 3) {
-        return (
-          <div className="absolute bottom-1.5 left-1.5 flex gap-1 items-center">
-            <span className="w-2.5 h-2.5 rounded-full bg-[#FF5500] dark:bg-[#fe6b00] shadow-[0_0_6px_rgba(255,85,0,0.5)]" />
-            <span className="w-2.5 h-2.5 rounded-full bg-[#008259] dark:bg-[#006645]" />
-          </div>
-        );
-      }
-      if (day === 5 || day === 8) {
-        return (
-          <span
-            className="material-symbols-outlined text-[#FF5500] dark:text-[#e01a22] text-[16px] absolute bottom-1.5 left-1.5 fill animate-pulse"
-            style={{ fontVariationSettings: "'FILL' 1" }}
-            title="Urgent Action Required"
-          >
-            warning
-          </span>
-        );
-      }
-      if (day === 10) {
-        return (
-          <div className="absolute bottom-1.5 left-1.5 flex gap-1 items-center">
-            <span className="w-2.5 h-2.5 rounded-full bg-[#008259] dark:bg-[#006645]" />
-          </div>
-        );
-      }
-      if (day === 11) {
-        return (
-          <div className="absolute bottom-1.5 left-1.5 flex gap-1 items-center">
-            <span className="w-2.5 h-2.5 rounded-full bg-[#FF5500] dark:bg-[#fe6b00]" />
-          </div>
-        );
-      }
-      if (day === 12) {
-        return (
-          <span
-            className="material-symbols-outlined text-[#008259] text-[16px] absolute bottom-1.5 left-1.5 fill"
-            style={{ fontVariationSettings: "'FILL' 1" }}
-            title="Completed All Actions"
-          >
-            check_circle
-          </span>
-        );
-      }
-    }
-
-    // Dynamic fallback for newly created tasks
     if (hasUrgent) {
       return (
         <span
@@ -334,9 +287,7 @@ export const CalendarView: React.FC = () => {
         {allCalendarDays.map((cell, idx) => {
           const dateString = formatDayString(cell.year, cell.month, cell.day);
           const isSelected = selectedDate === dateString;
-          const isAugust14 = cell.isCurrentMonth && cell.day === 14 && calendarMonth === 7;
-          const isAugust16 = cell.isCurrentMonth && cell.day === 16 && calendarMonth === 7;
-          const isAugust9 = cell.isCurrentMonth && cell.day === 9 && calendarMonth === 7;
+          const isToday = cell.isCurrentMonth && dateString === todayString;
 
           const bsDate = getBsDateFromAd(cell.year, cell.month, cell.day);
 
@@ -349,18 +300,12 @@ export const CalendarView: React.FC = () => {
           } else if (isSelected) {
             cellClass +=
               'ring-2 ring-[#FF5500] dark:ring-[#ffb4ac] border-[#FF5500] bg-[#FFF0EB] dark:bg-[#ffb4ac]/10 font-bold shadow-[0_4px_12px_rgba(255,85,0,0.18)] ';
-          } else if (isAugust16) {
-            cellClass +=
-              'bg-[#2C2C2E] dark:bg-[#2e3134] text-white border-[#2C2C2E] font-bold shadow-xs hover:bg-[#3f4347] ';
-          } else if (isAugust9) {
-            cellClass +=
-              'bg-[#F7F7F8] dark:bg-[#26282b] text-[#2C2C2E] dark:text-[#eff1f5] border-[#e5e5ea] dark:border-[#35383c] hover:border-[#FF5500]/60 ';
           } else {
             cellClass +=
               'bg-white dark:bg-[#1e2124] text-[#2C2C2E] dark:text-[#eff1f5] border-[#e5e5ea] dark:border-[#35383c] hover:border-[#FF5500]/60 hover:bg-[#FFF5F0] dark:hover:bg-[#25282c] ';
           }
 
-          if (isAugust14 && !isAugust16) {
+          if (isToday && !isSelected) {
             cellClass += 'text-[#FF5500] dark:text-[#ffb4ac] font-black ';
           }
 
@@ -382,7 +327,7 @@ export const CalendarView: React.FC = () => {
             >
               {/* Day Number Header based on Calendar Mode */}
               <div className="flex justify-between items-start w-full">
-                {isAugust14 ? (
+                {isToday ? (
                   <span className="w-1.5 h-1.5 rounded-full bg-[#FF5500] dark:bg-[#ffb4ac]" />
                 ) : (
                   <span />
