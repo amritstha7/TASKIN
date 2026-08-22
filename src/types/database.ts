@@ -245,6 +245,24 @@ export interface Database {
         Update: Partial<Database['public']['Tables']['personal_notes']['Insert']>;
         Relationships: [];
       };
+      task_completions: {
+        Row: {
+          id: string;
+          task_id: string;
+          branch_id: string;
+          completed_date: string;
+          completed_by: string | null;
+          completed_at: string;
+        };
+        Insert: {
+          id?: string;
+          task_id: string;
+          completed_date: string;
+          completed_by?: string | null;
+        };
+        Update: Partial<Database['public']['Tables']['task_completions']['Insert']>;
+        Relationships: [];
+      };
       media_notes: {
         Row: {
           id: string;
@@ -319,6 +337,7 @@ export type ProfileRow = Tables<'profiles'>;
 export type TaskRow = Tables<'tasks'>;
 export type TaskNoteRow = Tables<'task_notes'>;
 export type TaskPhotoRow = Tables<'task_photos'>;
+export type TaskCompletionRow = Tables<'task_completions'>;
 export type CommunicationRow = Tables<'communications'>;
 export type CommunicationNoteRow = Tables<'communication_notes'>;
 export type CommunicationPhotoRow = Tables<'communication_photos'>;

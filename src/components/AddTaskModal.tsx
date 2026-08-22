@@ -13,18 +13,19 @@ export const AddTaskModal: React.FC<AddTaskModalProps> = ({ isPageMode = false }
     isAddTaskModalOpen,
     setIsAddTaskModalOpen,
     addTask,
+    createCommunication,
     setCurrentScreen,
     t,
   } = useApp();
 
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
-  const [category, setCategory] = useState<string>('Protein Bar');
-  const [customCategory, setCustomCategory] = useState('');
   const [dueDate, setDueDate] = useState(todayIso);
   const [priority, setPriority] = useState<Priority>('medium');
   const [repeat, setRepeat] = useState<'none' | 'daily' | 'weekly' | 'monthly'>('none');
-  const [isUrgent, setIsUrgent] = useState(false);
+  const [taskType, setTaskType] = useState<'urgent' | 'normal' | 'comm'>('normal');
+  const isUrgent = taskType === 'urgent';
+  const isComm = taskType === 'comm';
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   const [notificationTiming, setNotificationTiming] = useState<'15m' | '30m' | '1h' | '1d'>('15m');
   const [errorMessage, setErrorMessage] = useState('');
@@ -47,31 +48,32 @@ export const AddTaskModal: React.FC<AddTaskModalProps> = ({ isPageMode = false }
       return;
     }
 
-    const finalCategory: TaskCategory =
-      category === 'custom' && customCategory.trim()
-        ? customCategory.trim()
-        : category || 'General Ops';
-
-    addTask({
-      title: title.trim(),
-      description: description.trim(),
-      category: finalCategory,
-      dueDate: dueDate || todayIso(),
-      priority: isUrgent ? 'urgent' : priority,
-      repeat,
-      isUrgent,
-      notifications: {
-        enabled: notificationsEnabled,
-        timing: notificationTiming,
-      },
-    });
+    if (isComm) {
+      createCommunication({
+        title: title.trim(),
+        description: description.trim(),
+        dueDate: dueDate || todayIso(),
+      });
+    } else {
+      addTask({
+        title: title.trim(),
+        description: description.trim(),
+        category: 'General Ops' as TaskCategory,
+        dueDate: dueDate || todayIso(),
+        priority: isUrgent ? 'urgent' : priority,
+        repeat,
+        isUrgent,
+        notifications: {
+          enabled: notificationsEnabled,
+          timing: notificationTiming,
+        },
+      });
+    }
 
     // Reset form
     setTitle('');
     setDescription('');
-    setCategory('Protein Bar');
-    setCustomCategory('');
-    setIsUrgent(false);
+    setTaskType('normal');
     setErrorMessage('');
     handleClose();
   };
@@ -147,172 +149,146 @@ export const AddTaskModal: React.FC<AddTaskModalProps> = ({ isPageMode = false }
           />
         </div>
 
-        {/* Category & Due Date */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div className="flex flex-col gap-1.5">
-            <label htmlFor="task-category" className="text-xs font-bold text-[#2C2C2E] dark:text-[#eff1f5]">
-              {t.category}
-            </label>
-            <div className="relative">
-              <select
-                id="task-category"
-                value={category}
-                onChange={(e) => setCategory(e.target.value)}
-                className="w-full border border-[#e5e5ea] dark:border-[#5d3f3c] rounded-xl px-4 py-2.5 min-h-[44px] focus:border-[#FF5500] outline-none bg-white dark:bg-[#25282c] text-[#2C2C2E] dark:text-[#eff1f5] text-sm transition-all appearance-none pr-10"
-              >
-                <option value="Protein Bar">Protein Bar</option>
-                <option value="RTD Nepal">RTD Nepal</option>
-                <option value="Gym Reading">Gym Reading</option>
-                <option value="AI">AI Shelf Forecast</option>
-                <option value="Excel">Excel / POS Audit</option>
-                <option value="Learning New Activity">Learning New Activity</option>
-                <option value="Compliance">Compliance &amp; Safety</option>
-                <option value="custom">+ Custom Category</option>
-              </select>
-              <span className="material-symbols-outlined absolute right-3 top-1/2 -translate-y-1/2 text-[#8E8E93] pointer-events-none text-xl">
-                expand_more
-              </span>
-            </div>
-
-            {category === 'custom' && (
-              <input
-                type="text"
-                value={customCategory}
-                onChange={(e) => setCustomCategory(e.target.value)}
-                placeholder="Type category..."
-                className="mt-2 w-full border border-[#FFD8CC] dark:border-[#5d3f3c] rounded-xl px-3 py-2 text-xs bg-[#FFF9F6] dark:bg-[#25282c] text-[#2C2C2E] dark:text-[#eff1f5] focus:outline-none focus:border-[#FF5500]"
-              />
-            )}
-          </div>
-
-          <div className="flex flex-col gap-1.5">
-            <label htmlFor="due-date" className="text-xs font-bold text-[#2C2C2E] dark:text-[#eff1f5]">
-              {t.dueDate}
-            </label>
-            <div className="relative">
-              <input
-                id="due-date"
-                type="date"
-                value={dueDate}
-                onChange={(e) => setDueDate(e.target.value)}
-                className="w-full border border-[#e5e5ea] dark:border-[#5d3f3c] rounded-xl px-4 py-2.5 min-h-[44px] focus:border-[#FF5500] outline-none bg-white dark:bg-[#25282c] text-[#2C2C2E] dark:text-[#eff1f5] text-sm transition-all pl-10"
-              />
-              <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-[#8E8E93] pointer-events-none text-xl">
-                calendar_month
-              </span>
-            </div>
+        {/* Due Date */}
+        <div className="flex flex-col gap-1.5">
+          <label htmlFor="due-date" className="text-xs font-bold text-[#2C2C2E] dark:text-[#eff1f5]">
+            {t.dueDate}
+          </label>
+          <div className="relative">
+            <input
+              id="due-date"
+              type="date"
+              value={dueDate}
+              onChange={(e) => setDueDate(e.target.value)}
+              className="w-full border border-[#e5e5ea] dark:border-[#5d3f3c] rounded-xl px-4 py-2.5 min-h-[44px] focus:border-[#FF5500] outline-none bg-white dark:bg-[#25282c] text-[#2C2C2E] dark:text-[#eff1f5] text-sm transition-all pl-10"
+            />
+            <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-[#8E8E93] pointer-events-none text-xl">
+              calendar_month
+            </span>
           </div>
         </div>
 
         {/* Priority & Repeat */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div className="flex flex-col gap-1.5">
-            <label htmlFor="priority" className="text-xs font-bold text-[#2C2C2E] dark:text-[#eff1f5]">
-              {t.priority}
-            </label>
-            <div className="relative">
-              <select
-                id="priority"
-                value={priority}
-                onChange={(e) => setPriority(e.target.value as Priority)}
-                className="w-full border border-[#e5e5ea] dark:border-[#5d3f3c] rounded-xl px-4 py-2.5 min-h-[44px] focus:border-[#FF5500] outline-none bg-white dark:bg-[#25282c] text-[#2C2C2E] dark:text-[#eff1f5] text-sm transition-all appearance-none pr-10"
-              >
-                <option value="low">Low</option>
-                <option value="medium">Medium</option>
-                <option value="high">High</option>
-                <option value="urgent">Urgent</option>
-              </select>
-              <span className="material-symbols-outlined absolute right-3 top-1/2 -translate-y-1/2 text-[#8E8E93] pointer-events-none text-xl">
-                expand_more
-              </span>
+        {!isComm && (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="flex flex-col gap-1.5">
+              <label htmlFor="priority" className="text-xs font-bold text-[#2C2C2E] dark:text-[#eff1f5]">
+                {t.priority}
+              </label>
+              <div className="relative">
+                <select
+                  id="priority"
+                  value={priority}
+                  onChange={(e) => setPriority(e.target.value as Priority)}
+                  className="w-full border border-[#e5e5ea] dark:border-[#5d3f3c] rounded-xl px-4 py-2.5 min-h-[44px] focus:border-[#FF5500] outline-none bg-white dark:bg-[#25282c] text-[#2C2C2E] dark:text-[#eff1f5] text-sm transition-all appearance-none pr-10"
+                >
+                  <option value="low">Low</option>
+                  <option value="medium">Medium</option>
+                  <option value="high">High</option>
+                  <option value="urgent">Urgent</option>
+                </select>
+                <span className="material-symbols-outlined absolute right-3 top-1/2 -translate-y-1/2 text-[#8E8E93] pointer-events-none text-xl">
+                  expand_more
+                </span>
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-1.5">
+              <label htmlFor="task-repeat" className="text-xs font-bold text-[#2C2C2E] dark:text-[#eff1f5]">
+                {t.repeat}
+              </label>
+              <div className="relative">
+                <select
+                  id="task-repeat"
+                  value={repeat}
+                  onChange={(e) => setRepeat(e.target.value as 'none' | 'daily' | 'weekly' | 'monthly')}
+                  className="w-full border border-[#e5e5ea] dark:border-[#5d3f3c] rounded-xl px-4 py-2.5 min-h-[44px] focus:border-[#FF5500] outline-none bg-white dark:bg-[#25282c] text-[#2C2C2E] dark:text-[#eff1f5] text-sm transition-all appearance-none pr-10"
+                >
+                  <option value="none">None</option>
+                  <option value="daily">Daily</option>
+                  <option value="weekly">Weekly</option>
+                  <option value="monthly">Monthly</option>
+                </select>
+                <span className="material-symbols-outlined absolute right-3 top-1/2 -translate-y-1/2 text-[#8E8E93] pointer-events-none text-xl">
+                  expand_more
+                </span>
+              </div>
             </div>
           </div>
-
-          <div className="flex flex-col gap-1.5">
-            <label htmlFor="task-repeat" className="text-xs font-bold text-[#2C2C2E] dark:text-[#eff1f5]">
-              {t.repeat}
-            </label>
-            <div className="relative">
-              <select
-                id="task-repeat"
-                value={repeat}
-                onChange={(e) => setRepeat(e.target.value as 'none' | 'daily' | 'weekly' | 'monthly')}
-                className="w-full border border-[#e5e5ea] dark:border-[#5d3f3c] rounded-xl px-4 py-2.5 min-h-[44px] focus:border-[#FF5500] outline-none bg-white dark:bg-[#25282c] text-[#2C2C2E] dark:text-[#eff1f5] text-sm transition-all appearance-none pr-10"
-              >
-                <option value="none">None</option>
-                <option value="daily">Daily</option>
-                <option value="weekly">Weekly</option>
-                <option value="monthly">Monthly</option>
-              </select>
-              <span className="material-symbols-outlined absolute right-3 top-1/2 -translate-y-1/2 text-[#8E8E93] pointer-events-none text-xl">
-                expand_more
-              </span>
-            </div>
-          </div>
-        </div>
-
-        {/* Urgent Toggle Card */}
-        <div className="flex items-center justify-between p-3.5 border border-[#e5e5ea] dark:border-[#5d3f3c] rounded-xl bg-[#F7F7F8] dark:bg-[#25282c]">
-          <div className="flex flex-col">
-            <span className="text-xs font-bold text-[#2C2C2E] dark:text-[#eff1f5]">
-              {t.isUrgentTask}
-            </span>
-            <span className="text-[11px] text-[#8E8E93] dark:text-[#8e9095]">
-              {t.isUrgentDesc}
-            </span>
-          </div>
-          <label className="relative inline-flex items-center cursor-pointer">
-            <input
-              type="checkbox"
-              checked={isUrgent}
-              onChange={(e) => setIsUrgent(e.target.checked)}
-              className="sr-only peer"
-            />
-            <div className="w-11 h-6 bg-[#e5e5ea] dark:bg-[#414448] peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#FF5500] dark:peer-checked:bg-[#b60013]" />
-          </label>
-        </div>
+        )}
 
         {/* Notifications Card */}
-        <div className="flex flex-col gap-2 p-3.5 border border-[#e5e5ea] dark:border-[#5d3f3c] rounded-xl bg-[#F7F7F8] dark:bg-[#25282c]">
-          <div className="flex items-center justify-between">
-            <div className="flex flex-col">
-              <span className="text-xs font-bold text-[#2C2C2E] dark:text-[#eff1f5]">
-                {t.notificationsTitle}
-              </span>
-              <span className="text-[11px] text-[#8E8E93] dark:text-[#8e9095]">
-                {t.notificationsDesc}
-              </span>
+        {!isComm && (
+          <div className="flex flex-col gap-2 p-3.5 border border-[#e5e5ea] dark:border-[#5d3f3c] rounded-xl bg-[#F7F7F8] dark:bg-[#25282c]">
+            <div className="flex items-center justify-between">
+              <div className="flex flex-col">
+                <span className="text-xs font-bold text-[#2C2C2E] dark:text-[#eff1f5]">
+                  {t.notificationsTitle}
+                </span>
+                <span className="text-[11px] text-[#8E8E93] dark:text-[#8e9095]">
+                  {t.notificationsDesc}
+                </span>
+              </div>
+              <label className="relative inline-flex items-center cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={notificationsEnabled}
+                  onChange={(e) => setNotificationsEnabled(e.target.checked)}
+                  className="sr-only peer"
+                />
+                <div className="w-11 h-6 bg-[#e5e5ea] dark:bg-[#414448] peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#FF5500] dark:peer-checked:bg-[#b60013]" />
+              </label>
             </div>
-            <label className="relative inline-flex items-center cursor-pointer">
-              <input
-                type="checkbox"
-                checked={notificationsEnabled}
-                onChange={(e) => setNotificationsEnabled(e.target.checked)}
-                className="sr-only peer"
-              />
-              <div className="w-11 h-6 bg-[#e5e5ea] dark:bg-[#414448] peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#FF5500] dark:peer-checked:bg-[#b60013]" />
-            </label>
-          </div>
 
-          {notificationsEnabled && (
-            <div className="relative mt-1">
-              <select
-                value={notificationTiming}
-                onChange={(e) =>
-                  setNotificationTiming(e.target.value as '15m' | '30m' | '1h' | '1d')
-                }
-                className="w-full border border-[#e5e5ea] dark:border-[#5d3f3c] rounded-xl px-3.5 py-2 min-h-[38px] focus:border-[#FF5500] outline-none bg-white dark:bg-[#191c1f] text-[#2C2C2E] dark:text-[#eff1f5] text-xs transition-all appearance-none pr-10"
+            {notificationsEnabled && (
+              <div className="relative mt-1">
+                <select
+                  value={notificationTiming}
+                  onChange={(e) =>
+                    setNotificationTiming(e.target.value as '15m' | '30m' | '1h' | '1d')
+                  }
+                  className="w-full border border-[#e5e5ea] dark:border-[#5d3f3c] rounded-xl px-3.5 py-2 min-h-[38px] focus:border-[#FF5500] outline-none bg-white dark:bg-[#191c1f] text-[#2C2C2E] dark:text-[#eff1f5] text-xs transition-all appearance-none pr-10"
+                >
+                  <option value="15m">15 mins before</option>
+                  <option value="30m">30 mins before</option>
+                  <option value="1h">1 hour before</option>
+                  <option value="1d">1 day before</option>
+                </select>
+                <span className="material-symbols-outlined absolute right-3 top-1/2 -translate-y-1/2 text-[#8E8E93] pointer-events-none text-base">
+                  expand_more
+                </span>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Task Type: which dashboard section this lands in */}
+        <div className="flex flex-col gap-1.5">
+          <label className="text-xs font-bold text-[#2C2C2E] dark:text-[#eff1f5]">Type</label>
+          <div className="grid grid-cols-3 gap-2">
+            {(
+              [
+                ['urgent', 'Urgent'],
+                ['normal', 'Normal'],
+                ['comm', 'Comm'],
+              ] as [typeof taskType, string][]
+            ).map(([value, label]) => (
+              <button
+                key={value}
+                type="button"
+                onClick={() => setTaskType(value)}
+                className={`min-h-[42px] rounded-xl border text-xs font-bold transition-all cursor-pointer ${
+                  taskType === value
+                    ? value === 'urgent'
+                      ? 'bg-[#d81b1b] border-[#d81b1b] text-white'
+                      : 'bg-[#FF5500] border-[#FF5500] text-white'
+                    : 'border-[#e5e5ea] dark:border-[#5d3f3c] text-[#2C2C2E] dark:text-[#eff1f5] bg-white dark:bg-[#25282c]'
+                }`}
               >
-                <option value="15m">15 mins before</option>
-                <option value="30m">30 mins before</option>
-                <option value="1h">1 hour before</option>
-                <option value="1d">1 day before</option>
-              </select>
-              <span className="material-symbols-outlined absolute right-3 top-1/2 -translate-y-1/2 text-[#8E8E93] pointer-events-none text-base">
-                expand_more
-              </span>
-            </div>
-          )}
+                {label}
+              </button>
+            ))}
+          </div>
         </div>
 
         {/* Submit Button */}

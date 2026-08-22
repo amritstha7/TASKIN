@@ -2,11 +2,12 @@ import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useApp } from '../context/AppContext';
 import { Task, Communication } from '../types';
+import { isTaskCompletedOnDate, tasksDueOnDate } from '../lib/recurrence';
 
 export const TaskAccordions: React.FC = () => {
   const {
     tasks,
-    toggleTaskComplete,
+    toggleTaskCompleteOnDate,
     deleteTask,
     snoozeTask,
     addNoteToTask,
@@ -23,9 +24,7 @@ export const TaskAccordions: React.FC = () => {
     setPreviewPhoto,
     removePhotoFromTask,
     setCurrentScreen,
-    urgentTasksCount,
-    generalTasksCount,
-    communicationsCount,
+    selectedDate,
     myNotesCount,
     t,
   } = useApp();
@@ -49,11 +48,17 @@ export const TaskAccordions: React.FC = () => {
   const [newPersonalNote, setNewPersonalNote] = useState<string>('');
   const [showAddNoteInput, setShowAddNoteInput] = useState<boolean>(false);
 
-  // Urgent and standard tasks
-  const urgentTasks = tasks.filter((tItem) => tItem.isUrgent);
-  const regularTasks = tasks.filter((tItem) => !tItem.isUrgent);
+  // Scoped to the calendar's selected date — a task only appears on the
+  // date(s) it's actually due (or recurs onto), never on every date.
+  const tasksForDate = tasksDueOnDate(tasks, selectedDate);
+  const urgentTasks = tasksForDate.filter((tItem) => tItem.isUrgent);
+  const regularTasks = tasksForDate.filter((tItem) => !tItem.isUrgent);
+  const commsForDate = communications.filter((c) => c.dueDate === selectedDate);
+  const urgentTasksCount = urgentTasks.length;
+  const generalTasksCount = regularTasks.length;
+  const communicationsCount = commsForDate.length;
 
-  const sortedComms = [...communications].sort((a, b) => {
+  const sortedComms = [...commsForDate].sort((a, b) => {
     if (commSortAsc) {
       return a.dueDate.localeCompare(b.dueDate);
     }
@@ -90,6 +95,7 @@ export const TaskAccordions: React.FC = () => {
       {/* MOBILE BREAKPOINT ONLY: Full-Card Tap Targets for Page-Level Route Navigation */}
       <div id="mobile-category-action-cards" className="md:hidden flex flex-col gap-2.5">
         {/* 1. Urgent Actions Mobile Card */}
+        {urgentTasksCount > 0 && (
         <motion.button
           whileTap={{ scale: 0.98 }}
           onClick={() => setCurrentScreen('urgent-tasks')}
@@ -110,8 +116,10 @@ export const TaskAccordions: React.FC = () => {
             chevron_right
           </span>
         </motion.button>
+        )}
 
         {/* 2. Tasks Mobile Card */}
+        {generalTasksCount > 0 && (
         <motion.button
           whileTap={{ scale: 0.98 }}
           onClick={() => setCurrentScreen('store-tasks')}
@@ -132,8 +140,10 @@ export const TaskAccordions: React.FC = () => {
             chevron_right
           </span>
         </motion.button>
+        )}
 
         {/* 3. Communications Mobile Card */}
+        {communicationsCount > 0 && (
         <motion.button
           whileTap={{ scale: 0.98 }}
           onClick={() => setCurrentScreen('communications')}
@@ -154,8 +164,9 @@ export const TaskAccordions: React.FC = () => {
             chevron_right
           </span>
         </motion.button>
+        )}
 
-        {/* 4. Notes / Custom Mobile Card */}
+        {/* 4. Notes / Custom Mobile Card — always shown (default fallback) */}
         <div
           onClick={() => setCurrentScreen('notes')}
           className="w-full bg-[#242830] dark:bg-[#1f2228] border border-[#353942] rounded-2xl min-h-[58px] px-4 py-3.5 flex items-center justify-between shadow-md hover:border-[#FF5500]/50 transition-all text-left cursor-pointer group"
@@ -192,7 +203,8 @@ export const TaskAccordions: React.FC = () => {
 
       {/* DESKTOP & TABLET: Retain Full Expandable/Collapsible Inline Accordions */}
       <div className="hidden md:flex flex-col gap-4">
-        {/* 1. URGENT ACTIONS ACCORDION */}
+        {/* 1. URGENT ACTIONS ACCORDION — hidden entirely when there are no urgent tasks */}
+        {urgentTasksCount > 0 && (
         <motion.div
           id="urgent-actions-accordion"
           layout
@@ -247,7 +259,7 @@ export const TaskAccordions: React.FC = () => {
                       key={task.id}
                       whileHover={{ y: -2 }}
                       className={`p-3.5 rounded-xl border transition-all card-hover-3d ${
-                        task.completed
+                        isTaskCompletedOnDate(task, selectedDate)
                           ? 'bg-[#F7F7F8] dark:bg-[#25282c] border-[#e5e5ea] dark:border-[#35383c] opacity-75'
                           : 'bg-white dark:bg-[#1f2225] border-[#FFD8CC] dark:border-[#93000d]/50 hover:border-[#FF5500] shadow-[0_4px_16px_rgba(255,85,0,0.08)]'
                       }`}
@@ -256,19 +268,19 @@ export const TaskAccordions: React.FC = () => {
                         <div className="flex items-start gap-3 flex-1">
                           <motion.button
                             whileTap={{ scale: 0.85 }}
-                            onClick={() => toggleTaskComplete(task.id)}
+                            onClick={() => toggleTaskCompleteOnDate(task.id, selectedDate)}
                             className={`mt-0.5 rounded-xl p-1 transition-all flex items-center justify-center cursor-pointer min-h-[36px] min-w-[36px] ${
-                              task.completed
+                              isTaskCompletedOnDate(task, selectedDate)
                                 ? 'text-[#008259] bg-[#e1ffec]'
                                 : 'text-[#8E8E93] hover:text-[#008259] hover:bg-[#e1ffec]'
                             }`}
-                            title={task.completed ? 'Mark as Pending' : 'Mark as Complete'}
+                            title={isTaskCompletedOnDate(task, selectedDate) ? 'Mark as Pending' : 'Mark as Complete'}
                           >
                             <span
                               className="material-symbols-outlined text-[24px]"
-                              style={{ fontVariationSettings: task.completed ? "'FILL' 1" : "'FILL' 0" }}
+                              style={{ fontVariationSettings: isTaskCompletedOnDate(task, selectedDate) ? "'FILL' 1" : "'FILL' 0" }}
                             >
-                              {task.completed ? 'check_circle' : 'radio_button_unchecked'}
+                              {isTaskCompletedOnDate(task, selectedDate) ? 'check_circle' : 'radio_button_unchecked'}
                             </span>
                           </motion.button>
 
@@ -276,7 +288,7 @@ export const TaskAccordions: React.FC = () => {
                             <div className="flex items-center gap-2 flex-wrap">
                               <h4
                                 className={`text-sm md:text-base font-bold tracking-tight ${
-                                  task.completed
+                                  isTaskCompletedOnDate(task, selectedDate)
                                     ? 'line-through text-[#8E8E93] dark:text-[#8e9095]'
                                     : 'text-[#2C2C2E] dark:text-[#eff1f5]'
                                 }`}
@@ -296,7 +308,7 @@ export const TaskAccordions: React.FC = () => {
                             </p>
 
                             {/* Completed metadata */}
-                            {task.completed && task.completedBy && (
+                            {isTaskCompletedOnDate(task, selectedDate) && task.completedBy && (
                               <div className="text-[11px] text-[#008259] font-bold mt-1.5 flex items-center gap-1.5 bg-[#e1ffec]/60 dark:bg-[#008259]/20 px-2 py-1 rounded-lg w-fit">
                                 <span className="material-symbols-outlined text-[15px]">verified</span>
                                 Completed by {task.completedBy}{task.completedAt ? ` at ${task.completedAt}` : ''}
@@ -453,8 +465,10 @@ export const TaskAccordions: React.FC = () => {
           )}
         </AnimatePresence>
       </motion.div>
+        )}
 
-      {/* 2. TASKS ACCORDION */}
+      {/* 2. TASKS ACCORDION — hidden entirely when there are no normal tasks */}
+      {generalTasksCount > 0 && (
       <motion.div
         layout
         className="rounded-2xl overflow-hidden card-depth border border-[#FFD8CC]/70 dark:border-[#5d3f3c] bg-white dark:bg-[#191c1f]"
@@ -502,7 +516,7 @@ export const TaskAccordions: React.FC = () => {
                       key={task.id}
                       whileHover={{ y: -2 }}
                       className={`p-3.5 rounded-xl border transition-all card-hover-3d ${
-                        task.completed
+                        isTaskCompletedOnDate(task, selectedDate)
                           ? 'bg-[#F7F7F8] dark:bg-[#25282c] border-[#e5e5ea] dark:border-[#35383c] opacity-75'
                           : 'bg-white dark:bg-[#1f2225] border-[#e5e5ea] dark:border-[#35383c] hover:border-[#FF5500] shadow-[0_4px_16px_rgba(0,0,0,0.04)]'
                       }`}
@@ -511,19 +525,19 @@ export const TaskAccordions: React.FC = () => {
                         <div className="flex items-start gap-3 flex-1">
                           <motion.button
                             whileTap={{ scale: 0.85 }}
-                            onClick={() => toggleTaskComplete(task.id)}
+                            onClick={() => toggleTaskCompleteOnDate(task.id, selectedDate)}
                             className={`mt-0.5 rounded-xl p-1 transition-all flex items-center justify-center cursor-pointer min-h-[36px] min-w-[36px] ${
-                              task.completed
+                              isTaskCompletedOnDate(task, selectedDate)
                                 ? 'text-[#008259] bg-[#e1ffec]'
                                 : 'text-[#8E8E93] hover:text-[#008259] hover:bg-[#e1ffec]'
                             }`}
-                            title={task.completed ? 'Mark as Pending' : 'Mark as Complete'}
+                            title={isTaskCompletedOnDate(task, selectedDate) ? 'Mark as Pending' : 'Mark as Complete'}
                           >
                             <span
                               className="material-symbols-outlined text-[24px]"
-                              style={{ fontVariationSettings: task.completed ? "'FILL' 1" : "'FILL' 0" }}
+                              style={{ fontVariationSettings: isTaskCompletedOnDate(task, selectedDate) ? "'FILL' 1" : "'FILL' 0" }}
                             >
-                              {task.completed ? 'check_circle' : 'radio_button_unchecked'}
+                              {isTaskCompletedOnDate(task, selectedDate) ? 'check_circle' : 'radio_button_unchecked'}
                             </span>
                           </motion.button>
 
@@ -531,7 +545,7 @@ export const TaskAccordions: React.FC = () => {
                             <div className="flex items-center gap-2 flex-wrap">
                               <h4
                                 className={`text-sm md:text-base font-bold tracking-tight ${
-                                  task.completed
+                                  isTaskCompletedOnDate(task, selectedDate)
                                     ? 'line-through text-[#8E8E93] dark:text-[#8e9095]'
                                     : 'text-[#2C2C2E] dark:text-[#eff1f5]'
                                 }`}
@@ -550,7 +564,7 @@ export const TaskAccordions: React.FC = () => {
                               {task.description}
                             </p>
 
-                            {task.completed && task.completedBy && (
+                            {isTaskCompletedOnDate(task, selectedDate) && task.completedBy && (
                               <div className="text-[11px] text-[#008259] font-bold mt-1.5 flex items-center gap-1.5 bg-[#e1ffec]/60 dark:bg-[#008259]/20 px-2 py-1 rounded-lg w-fit">
                                 <span className="material-symbols-outlined text-[15px]">verified</span>
                                 Completed by {task.completedBy}{task.completedAt ? ` (${task.completedAt})` : ''}
@@ -694,8 +708,10 @@ export const TaskAccordions: React.FC = () => {
           )}
         </AnimatePresence>
       </motion.div>
+      )}
 
-      {/* 3. COMMUNICATIONS ACCORDION */}
+      {/* 3. COMMUNICATIONS ACCORDION — hidden entirely when there are no communications */}
+      {communicationsCount > 0 && (
       <motion.div
         layout
         className="rounded-2xl overflow-hidden card-depth border border-[#FFD8CC]/70 dark:border-[#5d3f3c] bg-white dark:bg-[#191c1f]"
@@ -892,8 +908,9 @@ export const TaskAccordions: React.FC = () => {
           )}
         </AnimatePresence>
       </motion.div>
+      )}
 
-      {/* 4. MY TASKS & NOTES ACCORDION */}
+      {/* 4. MY TASKS & NOTES ACCORDION — always shown (default fallback when the others are empty) */}
       <motion.div
         layout
         className="rounded-2xl overflow-hidden card-depth border border-[#e5e5ea] dark:border-[#5d3f3c] bg-white dark:bg-[#191c1f]"

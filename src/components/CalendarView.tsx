@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useApp } from '../context/AppContext';
 import { getBsDateFromAd, formatAdToBsString, toDevanagariDigits, NEP_DAYS_NP } from '../utils/nepaliCalendar';
+import { isTaskCompletedOnDate, tasksDueOnDate } from '../lib/recurrence';
 
 export const CalendarView: React.FC = () => {
   const {
@@ -99,16 +100,15 @@ export const CalendarView: React.FC = () => {
 
   const allCalendarDays = [...prevMonthDays, ...currentMonthDays, ...nextMonthDays];
 
-  // Specific markers for August 2026 rendering
   const getCustomMarkerForDay = (day: number, isCurrentMonth: boolean) => {
     if (!isCurrentMonth) return null;
 
     const dateStr = formatDayString(calendarYear, calendarMonth, day);
-    const dayTasks = tasks.filter((taskItem) => taskItem.dueDate === dateStr);
+    const dayTasks = tasksDueOnDate(tasks, dateStr);
 
-    const hasUrgent = dayTasks.some((taskItem) => taskItem.isUrgent && !taskItem.completed);
-    const hasCompleted = dayTasks.some((taskItem) => taskItem.completed);
-    const hasPending = dayTasks.some((taskItem) => !taskItem.completed && !taskItem.isUrgent);
+    const hasUrgent = dayTasks.some((taskItem) => taskItem.isUrgent && !isTaskCompletedOnDate(taskItem, dateStr));
+    const hasCompleted = dayTasks.some((taskItem) => isTaskCompletedOnDate(taskItem, dateStr));
+    const hasPending = dayTasks.some((taskItem) => !isTaskCompletedOnDate(taskItem, dateStr) && !taskItem.isUrgent);
 
     if (hasUrgent) {
       return (
@@ -137,9 +137,9 @@ export const CalendarView: React.FC = () => {
   const getDayInfo = (cell: { day: number; month: number; year: number; isCurrentMonth: boolean }) => {
     const dateStr = formatDayString(cell.year, cell.month, cell.day);
     const bsDate = getBsDateFromAd(cell.year, cell.month, cell.day);
-    const dayTasks = tasks.filter((tItem) => tItem.dueDate === dateStr);
-    const urgentCount = dayTasks.filter((tItem) => tItem.isUrgent && !tItem.completed).length;
-    const completedCount = dayTasks.filter((tItem) => tItem.completed).length;
+    const dayTasks = tasksDueOnDate(tasks, dateStr);
+    const urgentCount = dayTasks.filter((tItem) => tItem.isUrgent && !isTaskCompletedOnDate(tItem, dateStr)).length;
+    const completedCount = dayTasks.filter((tItem) => isTaskCompletedOnDate(tItem, dateStr)).length;
     return {
       dateStr,
       bsDateStr: `${bsDate.dayNp} ${bsDate.monthNameNp} ${bsDate.yearNp} BS (${bsDate.monthNameEn} ${bsDate.day}, ${bsDate.year})`,

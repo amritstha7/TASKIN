@@ -14,3 +14,6 @@ realui/
 
 # mobile/ has its own nested .gitignore (node_modules, .env, .expo, ios/,
 # android/, etc.) which still applies once this directory is tracked here.
+
+# Google OAuth client secret download — never commit
+client_secret_*.json

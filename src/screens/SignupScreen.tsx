@@ -2,21 +2,32 @@ import React, { useState } from 'react';
 import { motion } from 'motion/react';
 import { useAuth } from '../providers/AuthProvider';
 import { BrandMark } from '../components/BrandMark';
+import type { AuthRoute } from '../hooks/useAuthRoute';
 
-export const SignupScreen: React.FC<{ onSwitchToLogin: () => void }> = ({ onSwitchToLogin }) => {
-  const { signUp } = useAuth();
+export const SignupScreen: React.FC<{ navigate: (route: AuthRoute) => void }> = ({ navigate }) => {
+  const { signUp, signInWithGoogle } = useAuth();
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [role, setRole] = useState('');
   const [branchName, setBranchName] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [googleSubmitting, setGoogleSubmitting] = useState(false);
   const [confirmationSent, setConfirmationSent] = useState(false);
+
+  const passwordsMismatch = confirmPassword.length > 0 && password !== confirmPassword;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+    if (passwordsMismatch || !confirmPassword) {
+      setError('Passwords do not match');
+      return;
+    }
     setSubmitting(true);
     const { error: signUpError, needsEmailConfirmation } = await signUp({
       email,
@@ -31,6 +42,16 @@ export const SignupScreen: React.FC<{ onSwitchToLogin: () => void }> = ({ onSwit
       return;
     }
     if (needsEmailConfirmation) setConfirmationSent(true);
+  };
+
+  const handleGoogle = async () => {
+    setError(null);
+    setGoogleSubmitting(true);
+    const { error: googleError } = await signInWithGoogle();
+    if (googleError) {
+      setError(googleError);
+      setGoogleSubmitting(false);
+    }
   };
 
   if (confirmationSent) {
@@ -48,7 +69,7 @@ export const SignupScreen: React.FC<{ onSwitchToLogin: () => void }> = ({ onSwit
           <p className="text-xs text-[#8E8E93] dark:text-[#8e9095]">
             We sent a confirmation link to <span className="font-bold">{email}</span>. Confirm your address, then sign in.
           </p>
-          <button onClick={onSwitchToLogin} className="text-xs font-bold text-[#FF5500] hover:underline pt-2">
+          <button onClick={() => navigate('/login')} className="text-xs font-bold text-[#FF5500] hover:underline pt-2">
             Back to sign in
           </button>
         </motion.div>
@@ -67,6 +88,24 @@ export const SignupScreen: React.FC<{ onSwitchToLogin: () => void }> = ({ onSwit
           <BrandMark size={48} />
           <h1 className="text-lg font-black tracking-tight text-[#2C2C2E] dark:text-[#eff1f5]">Create Account</h1>
           <p className="text-xs text-[#8E8E93] dark:text-[#8e9095] text-center">Join or create your store's shared workspace</p>
+        </div>
+
+        <motion.button
+          whileHover={{ scale: 1.02 }}
+          whileTap={{ scale: 0.97 }}
+          type="button"
+          onClick={() => void handleGoogle()}
+          disabled={googleSubmitting}
+          className="w-full flex items-center justify-center gap-2.5 border border-[#e5e5ea] dark:border-[#35383c] rounded-xl py-2.5 text-xs font-bold text-[#2C2C2E] dark:text-[#eff1f5] bg-white dark:bg-[#191c1f] hover:bg-[#F7F7F8] dark:hover:bg-[#25282c] transition-colors disabled:opacity-60"
+        >
+          <GoogleIcon />
+          {googleSubmitting ? 'Redirecting…' : 'Continue with Google'}
+        </motion.button>
+
+        <div className="flex items-center gap-3 my-4">
+          <div className="flex-1 h-px bg-[#e5e5ea] dark:bg-[#35383c]" />
+          <span className="text-[10px] font-bold uppercase text-[#8E8E93] dark:text-[#8e9095]">or</span>
+          <div className="flex-1 h-px bg-[#e5e5ea] dark:bg-[#35383c]" />
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-3 text-xs">
@@ -101,14 +140,55 @@ export const SignupScreen: React.FC<{ onSwitchToLogin: () => void }> = ({ onSwit
             <label className="font-bold text-[#2C2C2E] dark:text-[#eff1f5]">
               Password <span className="text-[#FF5500]">*</span>
             </label>
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-              minLength={6}
-              className="border border-[#e5e5ea] dark:border-[#35383c] rounded-xl px-3.5 py-2.5 bg-white dark:bg-[#191c1f] text-[#2C2C2E] dark:text-[#eff1f5] focus:outline-none focus:border-[#FF5500]"
-            />
+            <div className="relative">
+              <input
+                type={showPassword ? 'text' : 'password'}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+                minLength={6}
+                className="w-full border border-[#e5e5ea] dark:border-[#35383c] rounded-xl px-3.5 py-2.5 pr-10 bg-white dark:bg-[#191c1f] text-[#2C2C2E] dark:text-[#eff1f5] focus:outline-none focus:border-[#FF5500]"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword((v) => !v)}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[#8E8E93] hover:text-[#FF5500] cursor-pointer"
+                aria-label={showPassword ? 'Hide password' : 'Show password'}
+                tabIndex={-1}
+              >
+                <span className="material-symbols-outlined text-[18px]">{showPassword ? 'visibility_off' : 'visibility'}</span>
+              </button>
+            </div>
+          </div>
+
+          <div className="flex flex-col gap-1">
+            <label className="font-bold text-[#2C2C2E] dark:text-[#eff1f5]">
+              Confirm Password <span className="text-[#FF5500]">*</span>
+            </label>
+            <div className="relative">
+              <input
+                type={showConfirmPassword ? 'text' : 'password'}
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                required
+                minLength={6}
+                className={`w-full border rounded-xl px-3.5 py-2.5 pr-10 bg-white dark:bg-[#191c1f] text-[#2C2C2E] dark:text-[#eff1f5] focus:outline-none ${
+                  passwordsMismatch
+                    ? 'border-red-400 focus:border-red-400'
+                    : 'border-[#e5e5ea] dark:border-[#35383c] focus:border-[#FF5500]'
+                }`}
+              />
+              <button
+                type="button"
+                onClick={() => setShowConfirmPassword((v) => !v)}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[#8E8E93] hover:text-[#FF5500] cursor-pointer"
+                aria-label={showConfirmPassword ? 'Hide password' : 'Show password'}
+                tabIndex={-1}
+              >
+                <span className="material-symbols-outlined text-[18px]">{showConfirmPassword ? 'visibility_off' : 'visibility'}</span>
+              </button>
+            </div>
+            {passwordsMismatch && <p className="text-red-500 font-semibold">Passwords do not match</p>}
           </div>
 
           <div className="grid grid-cols-2 gap-3">
@@ -146,7 +226,7 @@ export const SignupScreen: React.FC<{ onSwitchToLogin: () => void }> = ({ onSwit
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.97 }}
             type="submit"
-            disabled={submitting}
+            disabled={submitting || passwordsMismatch}
             className="w-full bg-gradient-to-r from-[#FF5500] to-[#E04800] text-white py-2.5 rounded-xl font-bold text-xs shadow-md disabled:opacity-60"
           >
             {submitting ? 'Creating account...' : 'Create Account'}
@@ -155,7 +235,7 @@ export const SignupScreen: React.FC<{ onSwitchToLogin: () => void }> = ({ onSwit
 
         <div className="pt-4 mt-4 border-t border-[#e5e5ea] dark:border-[#35383c] text-center text-xs">
           <span className="text-[#8E8E93] dark:text-[#8e9095]">Already have an account? </span>
-          <button onClick={onSwitchToLogin} className="font-bold text-[#FF5500] hover:underline">
+          <button onClick={() => navigate('/login')} className="font-bold text-[#FF5500] hover:underline">
             Sign in
           </button>
         </div>
@@ -163,3 +243,23 @@ export const SignupScreen: React.FC<{ onSwitchToLogin: () => void }> = ({ onSwit
     </div>
   );
 };
+
+function GoogleIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true">
+      <path
+        fill="#4285F4"
+        d="M23.52 12.27c0-.85-.08-1.67-.22-2.45H12v4.64h6.47c-.28 1.5-1.13 2.78-2.4 3.63v3.02h3.88c2.27-2.09 3.57-5.17 3.57-8.84z"
+      />
+      <path
+        fill="#34A853"
+        d="M12 24c3.24 0 5.95-1.07 7.94-2.9l-3.88-3.02c-1.08.72-2.45 1.15-4.06 1.15-3.12 0-5.77-2.11-6.71-4.94H1.28v3.11C3.26 21.3 7.3 24 12 24z"
+      />
+      <path fill="#FBBC05" d="M5.29 14.29a7.2 7.2 0 0 1 0-4.58V6.6H1.28a12 12 0 0 0 0 10.8l4.01-3.11z" />
+      <path
+        fill="#EA4335"
+        d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.44-3.44C17.94 1.19 15.24 0 12 0 7.3 0 3.26 2.7 1.28 6.6l4.01 3.11C6.23 6.86 8.88 4.75 12 4.75z"
+      />
+    </svg>
+  );
+}

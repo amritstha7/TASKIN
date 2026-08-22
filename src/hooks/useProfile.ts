@@ -77,6 +77,8 @@ export function useProfile() {
     profile: query.data ? mapProfileRow(query.data) : undefined,
     branchId: query.data?.branch_id,
     isLoading: query.isLoading,
+    error: query.error,
+    refetch: query.refetch,
     updateProfile: updateProfileMutation.mutateAsync,
   };
 }

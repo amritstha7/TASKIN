@@ -24,7 +24,7 @@ import { CommunicationsScreen } from '../screens/CommunicationsScreen';
 import { NotesScreen } from '../screens/NotesScreen';
 
 export const MainLayout: React.FC = () => {
-  const { currentScreen, toast, isLoading } = useApp();
+  const { currentScreen, toast, isLoading, loadError, retryLoad } = useApp();
 
   const renderScreen = () => {
     switch (currentScreen) {
@@ -50,6 +50,24 @@ export const MainLayout: React.FC = () => {
         return <DashboardScreen />;
     }
   };
+
+  if (loadError) {
+    return (
+      <div className="bg-[#F7F7F8] dark:bg-[#191c1f] min-h-screen flex items-center justify-center p-4">
+        <div className="max-w-sm w-full bg-white dark:bg-[#25282c] rounded-2xl border border-[#e5e5ea] dark:border-[#35383c] shadow-2xl p-6 text-center space-y-3">
+          <span className="material-symbols-outlined text-[36px] text-[#FF5500]">error</span>
+          <h2 className="text-sm font-black text-[#2C2C2E] dark:text-[#eff1f5]">Couldn't load your account</h2>
+          <p className="text-xs text-[#8E8E93] dark:text-[#8e9095]">{loadError}</p>
+          <button
+            onClick={retryLoad}
+            className="w-full bg-gradient-to-r from-[#FF5500] to-[#E04800] text-white py-2.5 rounded-xl font-bold text-xs shadow-md cursor-pointer"
+          >
+            Try Again
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   if (isLoading) {
     return (

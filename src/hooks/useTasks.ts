@@ -8,7 +8,16 @@ import { BUCKETS, deleteFromBucket, getSignedUrlsBatch, uploadImage } from '../l
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../providers/AuthProvider';
 import type { Task, TaskPhotoProof } from '../types';
-import type { NotificationTiming, Priority, RepeatCadence, TaskNoteRow, TaskPhotoRow, TaskRow, TablesUpdate } from '../types/database';
+import type {
+  NotificationTiming,
+  Priority,
+  RepeatCadence,
+  TaskCompletionRow,
+  TaskNoteRow,
+  TaskPhotoRow,
+  TaskRow,
+  TablesUpdate,
+} from '../types/database';
 
 interface RawProfileRef {
   name: string;
@@ -17,6 +26,7 @@ interface RawProfileRef {
 interface RawTaskRow extends TaskRow {
   task_notes: (TaskNoteRow & { author: RawProfileRef | null })[];
   task_photos: (TaskPhotoRow & { uploader: RawProfileRef | null })[];
+  task_completions: TaskCompletionRow[];
   completed_by_profile: RawProfileRef | null;
   created_by_profile: RawProfileRef | null;
 }
@@ -26,7 +36,8 @@ const TASK_SELECT = `
   completed_by_profile:profiles!tasks_completed_by_fkey(name),
   created_by_profile:profiles!tasks_created_by_fkey(name),
   task_notes(*, author:profiles!task_notes_author_id_fkey(name)),
-  task_photos(*, uploader:profiles!task_photos_uploaded_by_fkey(name))
+  task_photos(*, uploader:profiles!task_photos_uploaded_by_fkey(name)),
+  task_completions(*)
 `;
 
 function mapTaskRow(row: RawTaskRow, signedUrlMap: Record<string, string>): Task {
@@ -60,6 +71,7 @@ function mapTaskRow(row: RawTaskRow, signedUrlMap: Record<string, string>): Task
       .slice()
       .sort((a, b) => a.created_at.localeCompare(b.created_at))
       .map((n) => n.body),
+    completedDates: row.task_completions.map((c) => c.completed_date),
     photos,
     attachmentName: row.attachment_name ?? undefined,
     attachmentUrl: row.attachment_url ?? undefined,
@@ -112,6 +124,7 @@ export function useTasks() {
   useRealtimeInvalidate(`tasks-${branchId}`, 'tasks', filter, queryClient, queryKey);
   useRealtimeInvalidate(`task-notes-${branchId}`, 'task_notes', filter, queryClient, queryKey);
   useRealtimeInvalidate(`task-photos-${branchId}`, 'task_photos', filter, queryClient, queryKey);
+  useRealtimeInvalidate(`task-completions-${branchId}`, 'task_completions', filter, queryClient, queryKey);
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey });
 
@@ -149,6 +162,28 @@ export function useTasks() {
         })
         .eq('id', task.id);
       if (error) throw error;
+    },
+    onSuccess: invalidate,
+  });
+
+  /** For recurring tasks: toggle completion for one specific occurrence date, independent of every other occurrence. */
+  const toggleOccurrenceComplete = useMutation({
+    mutationFn: async ({ task, dateStr }: { task: Task; dateStr: string }) => {
+      if (!user) throw new Error('Not authenticated');
+      const alreadyCompleted = (task.completedDates ?? []).includes(dateStr);
+      if (alreadyCompleted) {
+        const { error } = await supabase
+          .from('task_completions')
+          .delete()
+          .eq('task_id', task.id)
+          .eq('completed_date', dateStr);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase
+          .from('task_completions')
+          .insert({ task_id: task.id, completed_date: dateStr, completed_by: user.id });
+        if (error) throw error;
+      }
     },
     onSuccess: invalidate,
   });
@@ -233,6 +268,7 @@ export function useTasks() {
     error: query.error,
     createTask: createTask.mutateAsync,
     toggleComplete: toggleComplete.mutateAsync,
+    toggleOccurrenceComplete: toggleOccurrenceComplete.mutateAsync,
     completeWithPhoto: completeWithPhoto.mutateAsync,
     attachPhoto: attachPhoto.mutateAsync,
     removePhoto: removePhoto.mutateAsync,

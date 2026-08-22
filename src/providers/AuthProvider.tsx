@@ -18,6 +18,7 @@ interface AuthContextValue {
   isPasswordRecovery: boolean;
   signIn: (email: string, password: string) => Promise<{ error: string | null }>;
   signUp: (params: SignUpParams) => Promise<{ error: string | null; needsEmailConfirmation: boolean }>;
+  signInWithGoogle: () => Promise<{ error: string | null }>;
   signOut: () => Promise<void>;
   requestPasswordReset: (email: string) => Promise<{ error: string | null }>;
   updatePassword: (newPassword: string) => Promise<{ error: string | null }>;
@@ -29,10 +30,10 @@ const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 export function AuthProvider({ children }: PropsWithChildren) {
   const [session, setSession] = useState<Session | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  // Set when Supabase detects a password-recovery link in the URL. There's no
-  // router in this app, so a dedicated /reset-password route isn't viable —
-  // instead the recovery link redirects back to the app root, and this event
-  // tells AuthGate to render UpdatePasswordScreen instead of the normal app.
+  // Set when Supabase detects a password-recovery link in the URL (the
+  // recovery email redirects to /reset-password). AuthGate uses this to
+  // force UpdatePasswordScreen regardless of the current route, as a safety
+  // net for older links that may not carry the /reset-password path.
   const [isPasswordRecovery, setIsPasswordRecovery] = useState(false);
 
   useEffect(() => {
@@ -63,7 +64,26 @@ export function AuthProvider({ children }: PropsWithChildren) {
       },
     });
     if (error) return { error: error.message, needsEmailConfirmation: false };
+    // Supabase deliberately does not return an error for a duplicate email
+    // (it would let an attacker enumerate registered accounts) — instead it
+    // returns a "success" response whose user has an empty `identities`
+    // array. That's the documented way to detect "this email is already
+    // registered" client-side.
+    if (data.user && data.user.identities && data.user.identities.length === 0) {
+      return { error: 'Email already in use. Try signing in instead.', needsEmailConfirmation: false };
+    }
     return { error: null, needsEmailConfirmation: !data.session };
+  };
+
+  const signInWithGoogle: AuthContextValue['signInWithGoogle'] = async () => {
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: { redirectTo: window.location.origin },
+    });
+    // On success this redirects the whole page to Google immediately —
+    // nothing after this call runs. `error` here only ever reflects a
+    // failure to even start the OAuth flow (e.g. provider not configured).
+    return { error: error?.message ?? null };
   };
 
   const signOut: AuthContextValue['signOut'] = async () => {
@@ -72,7 +92,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
 
   const requestPasswordReset: AuthContextValue['requestPasswordReset'] = async (email) => {
     const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
-      redirectTo: window.location.origin,
+      redirectTo: `${window.location.origin}/reset-password`,
     });
     return { error: error?.message ?? null };
   };
@@ -92,6 +112,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
         isPasswordRecovery,
         signIn,
         signUp,
+        signInWithGoogle,
         signOut,
         requestPasswordReset,
         updatePassword,

@@ -96,6 +96,17 @@ export function useCommunications() {
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey });
 
+  const createCommunication = useMutation({
+    mutationFn: async (input: { title: string; description: string; dueDate: string }) => {
+      if (!branchId) throw new Error('No branch');
+      const { error } = await supabase
+        .from('communications')
+        .insert({ branch_id: branchId, title: input.title, description: input.description, due_date: input.dueDate });
+      if (error) throw error;
+    },
+    onSuccess: invalidate,
+  });
+
   const deleteCommunication = useMutation({
     mutationFn: async (communicationId: string) => {
       const { error } = await supabase.from('communications').delete().eq('id', communicationId);
@@ -188,6 +199,7 @@ export function useCommunications() {
     isRefetching: query.isRefetching,
     refetch: query.refetch,
     error: query.error,
+    createCommunication: createCommunication.mutateAsync,
     deleteCommunication: deleteCommunication.mutateAsync,
     toggleComplete: toggleComplete.mutateAsync,
     addNote: addNote.mutateAsync,

@@ -8,7 +8,7 @@ export const DashboardScreen: React.FC = () => {
       {/* Calendar Section (Default English AD, configurable in Settings) */}
       <CalendarView />
 
-      {/* Task & Communication Accordions */}
+      {/* Urgent/Tasks/Communications sections below are scoped to the calendar's selected date */}
       <TaskAccordions />
     </div>
   );

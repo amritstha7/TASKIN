@@ -30,6 +30,8 @@ interface AppContextType {
 
   // Data
   isLoading: boolean;
+  loadError: string | null;
+  retryLoad: () => void;
   tasks: Task[];
   communications: Communication[];
   notes: import('../types').MyNote[];
@@ -54,11 +56,14 @@ interface AppContextType {
   // Actions
   addTask: (task: Omit<Task, 'id' | 'createdAt' | 'completed'>) => void;
   toggleTaskComplete: (taskId: string) => void;
+  /** For recurring tasks, toggles completion for one specific occurrence date only; for one-off tasks, behaves like toggleTaskComplete. */
+  toggleTaskCompleteOnDate: (taskId: string, dateStr: string) => void;
   completeTaskWithPhoto: (taskId: string, blob: Blob, caption?: string) => void;
   attachPhotoToTask: (taskId: string, blob: Blob, caption?: string) => void;
   removePhotoFromTask: (taskId: string, photoId: string) => void;
   deleteTask: (taskId: string) => void;
   toggleCommunicationComplete: (commId: string) => void;
+  createCommunication: (input: { title: string; description: string; dueDate: string }) => void;
   deleteCommunication: (commId: string) => void;
   addNoteToTask: (taskId: string, noteText: string) => void;
   addNoteToComm: (commId: string, noteText: string) => void;
@@ -123,7 +128,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const queryClient = useQueryClient();
   const { signOut: authSignOut } = useAuth();
 
-  const { profile, isLoading: profileLoading, updateProfile } = useProfile();
+  const { profile, isLoading: profileLoading, error: profileError, refetch: refetchProfile, updateProfile } = useProfile();
   const userProfile = profile ?? DEFAULT_PROFILE;
 
   const tasksHook = useTasks();
@@ -137,7 +142,38 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const notes = personalNotesHook.notes;
   const activities = activitiesHook.activities;
 
-  const isLoading = profileLoading || tasksHook.isLoading;
+  // A hard timeout so a stuck request (network hang, a stale realtime
+  // subscription, etc.) always resolves into a visible error + retry
+  // instead of spinning forever — the actual root cause of "infinite
+  // loading" reports is rarely worth guessing at blind; what matters is
+  // that the user is never left staring at a spinner with no way out.
+  const [timedOut, setTimedOut] = useState(false);
+  const stillLoading = profileLoading || tasksHook.isLoading;
+  React.useEffect(() => {
+    if (!stillLoading) {
+      setTimedOut(false);
+      return undefined;
+    }
+    const timer = setTimeout(() => setTimedOut(true), 15000);
+    return () => clearTimeout(timer);
+  }, [stillLoading]);
+
+  const isLoading = stillLoading && !timedOut;
+  const loadError = timedOut
+    ? 'This is taking longer than expected. Your connection may be slow, or something went wrong loading your account.'
+    : profileError
+    ? profileError instanceof Error
+      ? profileError.message
+      : 'Failed to load your profile.'
+    : tasksHook.error
+    ? 'Failed to load your tasks.'
+    : null;
+
+  const retryLoad = () => {
+    setTimedOut(false);
+    void refetchProfile();
+    void tasksHook.refetch();
+  };
 
   const [currentScreen, setCurrentScreen] = useState<ScreenType>('dashboard');
   const [selectedDate, setSelectedDate] = useState<string>(() => toIsoDate(new Date()));
@@ -318,9 +354,40 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       .catch(onError);
   };
 
-  const completeTaskWithPhoto = (taskId: string, blob: Blob, caption?: string) => {
+  const toggleTaskCompleteOnDate = (taskId: string, dateStr: string) => {
+    const task = tasks.find((tItem) => tItem.id === taskId);
+    if (!task) return;
+    if (!task.repeat || task.repeat === 'none') {
+      toggleTaskComplete(taskId);
+      return;
+    }
+    const willComplete = !(task.completedDates ?? []).includes(dateStr);
     tasksHook
-      .completeWithPhoto({ taskId, blob, caption })
+      .toggleOccurrenceComplete({ task, dateStr })
+      .then(() => {
+        if (willComplete) {
+          playChime();
+          showToast(t.toastTaskCompleted);
+        } else {
+          showToast(t.toastTaskReopened, 'info');
+        }
+      })
+      .catch(onError);
+  };
+
+  const completeTaskWithPhoto = (taskId: string, blob: Blob, caption?: string) => {
+    const task = tasks.find((tItem) => tItem.id === taskId);
+    // A recurring task has no single global "completed" state — completing
+    // it via this modal (no date context beyond "now") marks today's
+    // occurrence only, same as the calendar's per-date checkbox would.
+    const promise =
+      task && task.repeat && task.repeat !== 'none'
+        ? tasksHook.attachPhoto({ taskId, blob, caption }).then(() =>
+            tasksHook.toggleOccurrenceComplete({ task, dateStr: toIsoDate(new Date()) })
+          )
+        : tasksHook.completeWithPhoto({ taskId, blob, caption });
+
+    promise
       .then(() => {
         playChime();
         showToast('Task marked complete with photo proof!');
@@ -364,6 +431,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           showToast(t.toastTaskCompleted);
         }
       })
+      .catch(onError);
+  };
+
+  const createCommunication = (input: { title: string; description: string; dueDate: string }) => {
+    commsHook
+      .createCommunication(input)
+      .then(() => showToast(`Communication "${input.title}" added successfully!`))
       .catch(onError);
   };
 
@@ -463,6 +537,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         goToPrevMonth,
         goToToday,
         isLoading,
+        loadError,
+        retryLoad,
         tasks,
         communications,
         notes,
@@ -479,11 +555,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setCalendarMode,
         addTask,
         toggleTaskComplete,
+        toggleTaskCompleteOnDate,
         completeTaskWithPhoto,
         attachPhotoToTask,
         removePhotoFromTask,
         deleteTask,
         toggleCommunicationComplete,
+        createCommunication,
         deleteCommunication,
         addNoteToTask,
         addNoteToComm,

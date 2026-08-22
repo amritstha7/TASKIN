@@ -40,6 +40,8 @@ export interface Task {
   completed: boolean;
   completedBy?: string;
   completedAt?: string;
+  /** For recurring tasks (repeat !== 'none'): the set of dates (YYYY-MM-DD) this task has been completed on. Ignored for one-off tasks — use `completed` instead. */
+  completedDates?: string[];
   notes?: string[];
   photos?: TaskPhotoProof[];
   attachmentName?: string;
